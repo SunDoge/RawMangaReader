@@ -1,5 +1,7 @@
 # RawMangaReader
 
+![image](https://github.com/SunDoge/RawMangaReader/assets/16167062/dd913e44-b884-4939-a3cf-cf8d199b9d57)
+
 如果下载 GitHub 上的文件存在困难，可以使用 [https://ghproxy.com/](https://ghproxy.com/)
 
 使用教程：[【给自己开发了一个啃生肉专用的日文OCR软件-哔哩哔哩】](https://b23.tv/EFDIRNE)
