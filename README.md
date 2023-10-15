@@ -11,3 +11,8 @@
 [下载模型](https://huggingface.co/SunDoge/raw-manga-reader-model/tree/main)
 
 [反馈问题](https://github.com/SunDoge/RawMangaReader/issues)
+
+## 赞助一杯咖啡 ☕
+
+![photo_2023-10-15_11-48-27](https://github.com/SunDoge/RawMangaReader/assets/16167062/c82a55ae-3612-4898-ad91-859983988a34)
+
