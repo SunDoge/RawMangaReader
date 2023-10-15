@@ -1,6 +1,8 @@
 # RawMangaReader
 
-![image](https://github.com/SunDoge/RawMangaReader/assets/16167062/dd913e44-b884-4939-a3cf-cf8d199b9d57)
+<p align="center">
+    <img src="https://github.com/SunDoge/RawMangaReader/assets/16167062/dd913e44-b884-4939-a3cf-cf8d199b9d57" />
+</p>
 
 如果下载 GitHub 上的文件存在困难，可以使用 [https://ghproxy.com/](https://ghproxy.com/)
 
@@ -14,5 +16,6 @@
 
 ## 赞助一杯咖啡 ☕
 
-![photo_2023-10-15_11-48-27](https://github.com/SunDoge/RawMangaReader/assets/16167062/c82a55ae-3612-4898-ad91-859983988a34)
-
+<p align="center">
+    <img src="https://github.com/SunDoge/RawMangaReader/assets/16167062/c82a55ae-3612-4898-ad91-859983988a34" width=50% />
+</p>
