@@ -1,5 +1,15 @@
 # RawMangaReader
 
+一个支持竖排日文的OCR软件，专为生肉漫画设计。
+
+## 访问量统计
+
+<p align="center">
+    <img src="https://count.ahwa.cc/SunDoge:RawMangaReader" />
+</p>
+
+## 软件介绍
+
 <p align="center">
     <img src="https://github.com/SunDoge/RawMangaReader/assets/16167062/dd913e44-b884-4939-a3cf-cf8d199b9d57" />
 </p>
