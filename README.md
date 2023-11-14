@@ -3,10 +3,7 @@
 一个支持竖排日文的OCR软件，专为生肉漫画设计。
 
 ## 访问量统计
-
-<p align="center">
-    <img src="https://count.ahwa.cc/SunDoge:RawMangaReader" />
-</p>
+[![Moe](https://count.ahwa.cc/SunDoge:RawMangaReader)](https://count.ahwa.cc/SunDoge:RawMangaReader)
 
 ## 软件介绍
 
