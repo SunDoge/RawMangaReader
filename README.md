@@ -4,7 +4,7 @@
 
 ## 访问量统计
 
-[![Moe](https://count.ahwa.cc/SunDoge:RawMangaReader)](https://count.ahwa.cc/SunDoge:RawMangaReader)
+[![Moe](https://count.ahwa.cc/SunDoge:RawMangaReader?)](https://count.ahwa.cc/SunDoge:RawMangaReader)
 
 ## 软件介绍
 
