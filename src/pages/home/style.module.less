@@ -1,0 +1,77 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  width: 100%;
+  height: 100%;
+
+  * {
+    box-sizing: content-box;
+  }
+}
+
+.header {
+  height: 28px;
+  border: 1px solid #eee;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  // column-gap: 12px;
+
+  padding: 16px 16px 8px;
+
+  .left {
+    display: flex;
+    flex-direction: row;
+    column-gap: 12px;
+    flex-grow: 1;
+  }
+}
+
+.main {
+  width: 100%;
+  height: calc(100% - 68px);
+  display: flex;
+  flex-direction: row;
+
+  .aside {
+    width: 20%;
+    max-width: 200px;
+    min-width: 120px;
+    height: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .operation {
+    width: 100%;
+    flex-grow: 1;
+  }
+}
+
+.empty {
+  width: 100%;
+  height: 100%;
+  margin: 0px !important;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+
+  .operation {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    column-gap: 12px;
+  }
+}
+
+.rightMenu {
+  min-width: 100px !important;
+
+  :global {
+    .ant-dropdown-menu-title-content {
+      text-align: center;
+    }
+  }
+}
