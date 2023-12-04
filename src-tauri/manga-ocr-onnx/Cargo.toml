@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 ndarray = "0.15"
-ort = { version = "~1.15", default-features = false, features = [
+ort = { version = "~1.16", default-features = false, features = [
     # "half",
     "load-dynamic",
 ] }
