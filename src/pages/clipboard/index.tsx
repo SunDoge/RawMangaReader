@@ -1,11 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { UnlistenFn, listen } from "@tauri-apps/api/event";
+import React, { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { IMAGE_CHANGED, listenToClipboard } from "tauri-plugin-clipboard-api";
-import { event, invoke } from "@tauri-apps/api";
+import { invoke } from "@tauri-apps/api";
 import { Button, List, Switch } from "antd";
 import { Link } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
-import { useMemoizedFn } from "ahooks";
 import { appWindow } from "@tauri-apps/api/window"
 
 type Result = {
