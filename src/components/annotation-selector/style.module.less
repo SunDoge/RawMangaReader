@@ -1,0 +1,39 @@
+.selector {
+  width: 100%;
+  height: 100%;
+
+  &:hover {
+    .deleteBtn {
+      display: inline-block;
+    }
+  }
+}
+
+.selected {
+  border: 1px solid red;
+  background-color: #FF6F0059;
+}
+
+.info {
+  position: absolute;
+  width: 100%;
+  min-width: 70px;
+  top: -4px;
+  left: 0px;
+  z-index: 1;
+  transform: translate(0px, -100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .operation {
+    display: inline-flex;
+    column-gap: 4px;
+
+    :global {
+      .anticon {
+        cursor: pointer;
+      }
+    }
+  }
+}

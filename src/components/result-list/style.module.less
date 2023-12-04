@@ -1,0 +1,55 @@
+.resultList {
+  font-size: 12px;
+  height: 100%;
+  padding: 8px;
+
+  display: flex;
+  flex-direction: column;
+  row-gap: 12px;
+
+  .header {
+    display: flex;
+    justify-content: space-around;
+  }
+
+  :global(.ant-btn.ant-btn-sm) {
+    font-size: 12px;
+  }
+
+  .item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    padding: 4px;
+    padding-left: 22px;
+    row-gap: 1em;
+    border-radius: 4px;
+
+    &.selected {
+      background-color: #FF6F0028;
+    }
+
+    :global {
+      .index {
+        position: absolute;
+        top: 4px;
+        left: 4px;
+      }
+
+      .footer {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+
+        .operation {
+          display: inline-flex;
+          column-gap: 4px;
+
+          .anticon {
+            cursor: pointer;
+          }
+        }
+      }
+    }
+  }
+}
