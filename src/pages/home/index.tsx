@@ -12,11 +12,13 @@ import { FileImageOutlined, FolderOpenOutlined, MenuOutlined, UploadOutlined } f
 import { About } from "@/components/about";
 import { trackEvent } from "@aptabase/tauri";
 import { areAreasEqual } from "@/utils";
+import { useTranslation } from "react-i18next";
 
 
 interface IProps { }
 
 export const Home: React.FC<IProps> = (_props) => {
+  const { t } = useTranslation();
   const [modelLoaded, setModelLoaded] = useState<boolean>(false);
   const [modelLoading, setModelLoading] = useState<boolean>(false);
   const [imageList, setImageList] = useState<string[]>([]);
@@ -187,7 +189,7 @@ export const Home: React.FC<IProps> = (_props) => {
           loading={modelLoading}
           danger={modelLoaded}
         >
-          {modelLoaded ? "更换模型" : "加载模型"}
+          {modelLoaded ? t("changeModel") : t("loadModel")}
         </Button>
         <Button type="primary" size="small" icon={<FileImageOutlined />} onClick={openImages}>
           加载图片
