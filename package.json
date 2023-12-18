@@ -21,7 +21,7 @@
     "lodash": "^4.17.21",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.1",
+    "react-router-dom": "^6.21.0",
     "tauri-plugin-clipboard-api": "^0.5",
     "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1",
     "uuid": "^9.0.1"
