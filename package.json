@@ -11,7 +11,7 @@
     "download_dylib": "node scripts/download_onnxruntime.mjs"
   },
   "dependencies": {
-    "@ant-design/icons": "^5.2.5",
+    "@ant-design/icons": "^5.3.0",
     "@aptabase/tauri": "^0.4.1",
     "@bmunozg/react-image-area": "^1.1.0",
     "@tauri-apps/api": "^1.5.0",
