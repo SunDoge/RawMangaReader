@@ -22,7 +22,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.1",
-    "tauri-plugin-clipboard-api": "^0.5",
+    "tauri-plugin-clipboard-api": "^0.6",
     "tauri-plugin-log-api": "github:tauri-apps/tauri-plugin-log#v1",
     "uuid": "^9.0.1"
   },
