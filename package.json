@@ -16,7 +16,7 @@
     "@bmunozg/react-image-area": "^1.1.0",
     "@tauri-apps/api": "^1.5.0",
     "ahooks": "^3.7.8",
-    "antd": "^5.13.0",
+    "antd": "^5.14.1",
     "classnames": "^2.5.1",
     "lodash": "^4.17.21",
     "react": "^18.2.0",
