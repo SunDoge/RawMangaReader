@@ -39,8 +39,8 @@ dependencies:
     specifier: ^6.21.1
     version: 6.21.1(react-dom@18.2.0)(react@18.2.0)
   tauri-plugin-clipboard-api:
-    specifier: ^0.5
-    version: 0.5.5
+    specifier: ^0.6
+    version: 0.6.0
   tauri-plugin-log-api:
     specifier: github:tauri-apps/tauri-plugin-log#v1
     version: github.com/tauri-apps/tauri-plugin-log/f7142fcf10841cdabab2fbe8650e9adc3f0bb212
@@ -2808,8 +2808,8 @@ packages:
       yallist: 4.0.0
     dev: true
 
-  /tauri-plugin-clipboard-api@0.5.5:
-    resolution: {integrity: sha512-Uf8IV/UXItQ2HZF3+JueKWph2GI+EXH5h0ZMzsbgFvuoR1OeQxW88MsV2T8ur0XdAibC9AeZJY0ZD/+kYLQT4w==}
+  /tauri-plugin-clipboard-api@0.6.0:
+    resolution: {integrity: sha512-8HNkCo+tPiY1sPKrlTkFexUlK/F2m0srUFnPyoL7VdD8BUQniT/0D9FBrm6VsczpLRy6YjD/EezbfN02Lq8PeQ==}
     dependencies:
       '@tauri-apps/api': 1.5.0
       tslib: 2.6.1
