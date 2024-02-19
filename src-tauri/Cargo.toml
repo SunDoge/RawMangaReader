@@ -33,7 +33,7 @@ log = "0.4"
 tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1", features = [
     "colored",
 ] }
-tauri-plugin-clipboard = "0.5"
+tauri-plugin-clipboard = "0.6"
 base64-simd = "0.8.0"
 thiserror = "1.0.49"
 
