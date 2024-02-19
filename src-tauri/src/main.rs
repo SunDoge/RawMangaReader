@@ -102,7 +102,7 @@ fn set_ort_env(path_resolver: &PathResolver) {
     } else if cfg!(target_os = "windows") {
         "onnxruntime.dll"
         // return; // windows下自动加载同一目录下的dll
-    } else if cfg!(target_os = "osx") {
+    } else if cfg!(target_os = "macos") {
         "libonnxruntime.dylib"
     } else {
         panic!("unknown os")
