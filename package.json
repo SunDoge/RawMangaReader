@@ -41,7 +41,7 @@
     "postcss": "^8.4.31",
     "tailwindcss": "^3.4.0",
     "tar": "^6.2.0",
-    "typescript": "^5.3.2",
+    "typescript": "^5.4.2",
     "vite": "^5.1.3"
   }
 }
