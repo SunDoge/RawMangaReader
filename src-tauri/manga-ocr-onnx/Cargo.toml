@@ -13,5 +13,5 @@ ort = { version = "~1.15", default-features = false, features = [
 ] }
 image = "0.25"
 anyhow = "1.0"
-kelp = "0.4"
+kelp = "0.5"
 log = "0.4"
