@@ -15,7 +15,7 @@
     "@aptabase/tauri": "^0.4.1",
     "@bmunozg/react-image-area": "^1.1.0",
     "@tauri-apps/api": "^1.5.0",
-    "ahooks": "^3.7.8",
+    "ahooks": "^3.8.1",
     "antd": "^5.17.3",
     "classnames": "^2.5.1",
     "lodash": "^4.17.21",
