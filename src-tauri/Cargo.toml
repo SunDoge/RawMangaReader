@@ -43,4 +43,5 @@ thiserror = "1.0.49"
 custom-protocol = ["tauri/custom-protocol"]
 
 [workspace]
+resolver = "2"
 members = ["manga-ocr-onnx"]
