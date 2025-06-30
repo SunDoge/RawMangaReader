@@ -1,7 +1,6 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use log::info;
 use std::{collections::HashMap, sync::Mutex};
 // use tauri_plugin_aptabase::EventTracker;
 
@@ -164,6 +163,7 @@ impl Bbox {
 //         });
 // }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     app_lib::run();
 }

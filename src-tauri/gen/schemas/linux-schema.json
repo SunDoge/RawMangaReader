@@ -2187,6 +2187,18 @@
       "description": "Permission identifier",
       "oneOf": [
         {
+          "description": "Enables the track_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "aptabase:allow-track-event",
+          "markdownDescription": "Enables the track_event command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the track_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "aptabase:deny-track-event",
+          "markdownDescription": "Denies the track_event command without any pre-configured scope."
+        },
+        {
           "description": "Default core plugins set.\n#### This default permission set includes:\n\n- `core:path:default`\n- `core:event:default`\n- `core:window:default`\n- `core:webview:default`\n- `core:app:default`\n- `core:image:default`\n- `core:resources:default`\n- `core:menu:default`\n- `core:tray:default`",
           "type": "string",
           "const": "core:default",
@@ -5887,6 +5899,24 @@
           "type": "string",
           "const": "fs:write-files",
           "markdownDescription": "This enables all file write related commands without any pre-configured accessible paths."
+        },
+        {
+          "description": "Allows the log command\n#### This default permission set includes:\n\n- `allow-log`",
+          "type": "string",
+          "const": "log:default",
+          "markdownDescription": "Allows the log command\n#### This default permission set includes:\n\n- `allow-log`"
+        },
+        {
+          "description": "Enables the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "log:allow-log",
+          "markdownDescription": "Enables the log command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the log command without any pre-configured scope.",
+          "type": "string",
+          "const": "log:deny-log",
+          "markdownDescription": "Denies the log command without any pre-configured scope."
         },
         {
           "description": "This permission set configures which\nshell functionality is exposed by default.\n\n#### Granted Permissions\n\nIt allows to use the `open` functionality with a reasonable\nscope pre-configured. It will allow opening `http(s)://`,\n`tel:` and `mailto:` links.\n\n#### This default permission set includes:\n\n- `allow-open`",
