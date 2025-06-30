@@ -3,14 +3,14 @@
 
 use log::info;
 use std::{collections::HashMap, sync::Mutex};
-use tauri_plugin_aptabase::EventTracker;
+// use tauri_plugin_aptabase::EventTracker;
 
 use image::DynamicImage;
 // use manga_ocr_onnx::inference::OcrModel;
 use serde::Deserialize;
-use tauri::Manager;
-use tauri::PathResolver;
-use tauri_plugin_log::LogTarget;
+// use tauri::Manager;
+// use tauri::PathResolver;
+// use tauri_plugin_log::LogTarget;
 
 // type Model = Mutex<Option<OcrModel>>;
 // Map<Path, Image>
@@ -120,8 +120,8 @@ impl Bbox {
 
 // fn main() {
 //     tauri::Builder::default()
-.plugin(tauri_plugin_fs::init())
-.plugin(tauri_plugin_dialog::init())
+// .plugin(tauri_plugin_fs::init())
+// .plugin(tauri_plugin_dialog::init())
 //         .plugin(tauri_plugin_aptabase::Builder::new(APP_KEY).build())
 //         .plugin(tauri_plugin_clipboard::init())
 //         .plugin(
