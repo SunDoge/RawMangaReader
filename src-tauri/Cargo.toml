@@ -10,32 +10,28 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "1.5.0", features = [] }
+tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "1.6.0", features = [
-    "window-all",
-    "app-all",
-    "clipboard-all",
-    "shell-open",
-    "dialog-all",
-    "fs-all",
-    "path-all",
+tauri = { version = "2", features = [
     "protocol-asset",
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 image = "0.25"
-manga-ocr-onnx = { path = "./manga-ocr-onnx" }
+# manga-ocr-onnx = { path = "./manga-ocr-onnx" }
 # tauri-plugin-persisted-scope = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
-tauri-plugin-aptabase = "0.5"
+# tauri-plugin-aptabase = "0.5"
 log = "0.4"
-tauri-plugin-log = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1", features = [
-    "colored",
-] }
-tauri-plugin-clipboard = "0.6"
+# tauri-plugin-log = { features = [
+#     "colored",
+# ] , version = "2" }
+# tauri-plugin-clipboard = "0.6"
 base64-simd = "0.8.0"
 thiserror = "1.0.49"
+tauri-plugin-shell = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem
@@ -44,3 +40,8 @@ custom-protocol = ["tauri/custom-protocol"]
 
 [workspace]
 members = ["manga-ocr-onnx"]
+
+
+[lib]
+name = "app_lib"
+crate-type = ["staticlib", "cdylibt", "rlib"]
