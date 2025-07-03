@@ -2147,6 +2147,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "imgproc"
+version = "0.1.0"
+dependencies = [
+ "image",
+]
+
+[[package]]
 name = "imgref"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2487,6 +2494,14 @@ name = "mac"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c41e0c4fef86961ac6d6f8a82609f55f31b05e4fce149ac5710e439df7619ba4"
+
+[[package]]
+name = "manga-ocr"
+version = "0.1.0"
+dependencies = [
+ "ort",
+ "ractor",
+]
 
 [[package]]
 name = "manga-ocr-onnx"
@@ -3832,6 +3847,7 @@ dependencies = [
  "base64-simd",
  "image",
  "log",
+ "manga-ocr",
  "ractor",
  "serde",
  "serde_json",
@@ -5227,6 +5243,10 @@ checksum = "06794f8f6c5c898b3275aebefa6b8a1cb24cd2c6c79397ab15774837a0bc5755"
 dependencies = [
  "winapi-util",
 ]
+
+[[package]]
+name = "text-det"
+version = "0.1.0"
 
 [[package]]
 name = "textwrap"

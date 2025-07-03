@@ -16,7 +16,7 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = ["protocol-asset"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-image = "0.25"
+image = { workspace = true }
 # manga-ocr-onnx = { path = "./manga-ocr-onnx" }
 # tauri-plugin-persisted-scope = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
 tauri-plugin-aptabase = "1.0"
@@ -28,12 +28,8 @@ tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 ractor = { version = "0.15.6", features = ["async-trait"] }
 tauri-plugin-log = "2"
-tokio = { version = "1", features = ["full"] }
-
-
-[workspace]
-members = ["manga-ocr-onnx"]
-
+tokio = { workspace = true }
+manga-ocr = { path = "./crates/manga-ocr" }
 
 [lib]
 name = "app_lib"
@@ -42,3 +38,20 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 # Make dev compile faster
 [profile.dev.package."*"]
 opt-level = 2
+
+
+[workspace]
+members = [
+    "./",
+    "crates/imgproc",
+    "crates/manga-ocr",
+    "crates/text-det",
+    "manga-ocr-onnx",
+]
+
+
+[workspace.dependencies]
+ort = { version = "=2.0.0-rc.10" }
+image = { version = "0.25" }
+ractor = { version = "0.15.6", features = ["async-trait"] }
+tokio = { version = "1", features = ["full"] }
