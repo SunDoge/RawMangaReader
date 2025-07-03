@@ -15,7 +15,7 @@ import {
   IArea,
   IAreaRendererProps,
 } from "@bmunozg/react-image-area";
-import { convertFileSrc } from "@tauri-apps/api/tauri";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import { useSize, useThrottleEffect } from "ahooks";
 import { processPercent2Pixel, processPixel2Percent } from "./utils";
 import { AnnotationSelector } from "../annotation-selector";

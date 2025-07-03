@@ -11,7 +11,7 @@ import {
   SyncOutlined,
 } from "@ant-design/icons";
 // import { copyToClipBoard } from "./utils";
-import { writeText } from "@tauri-apps/api/clipboard";
+// import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
 interface IResultListProps {
   annotations: IAnnotationType[];
@@ -36,7 +36,8 @@ export const ResultList: React.FC<IResultListProps> = (props) => {
       ""
     );
     // copyToClipBoard(text);
-    await writeText(text);
+    // await writeText(text);
+    console.log(text)
     messageApi.success("全部复制成功");
   }, [annotations]);
 
@@ -100,9 +101,11 @@ export const ResultList: React.FC<IResultListProps> = (props) => {
                       // copyToClipBoard(
                       //   (annotation.ocr || "").replace(/[\r\n]/g, "")
                       // )
-                      await writeText(
-                        (annotation.ocr || "").replace(/[\r\n]/g, "")
-                      )
+                      // await writeText(
+                      //   (annotation.ocr || "").replace(/[\r\n]/g, "")
+                      // )
+                      console.log()
+
                     }
                   />
                 </Tooltip>
