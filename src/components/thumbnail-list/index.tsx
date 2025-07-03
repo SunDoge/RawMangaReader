@@ -1,5 +1,5 @@
 import React, { useEffect } from "react";
-import { convertFileSrc } from "@tauri-apps/api/tauri";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import classNames from "classnames";
 import style from "./style.module.less";
 
