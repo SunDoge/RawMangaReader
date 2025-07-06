@@ -29,4 +29,5 @@
 
 <p align="center">
     <img src="https://github.com/SunDoge/RawMangaReader/assets/16167062/c82a55ae-3612-4898-ad91-859983988a34" width=50% />
+    <img src="https://github.com/user-attachments/assets/261ab48f-04d9-47fa-86d1-dbae2acf78f4" width=50% />
 </p>
