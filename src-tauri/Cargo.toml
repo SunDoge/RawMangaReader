@@ -22,7 +22,7 @@ image = { workspace = true }
 tauri-plugin-aptabase = "1.0"
 log = "0.4"
 base64-simd = "0.8.0"
-thiserror = "1.0.49"
+thiserror = "2.0.12"
 tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
