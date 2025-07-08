@@ -10,5 +10,5 @@ ndarray = "0.15"
 ort = { version = "=2.0.0-rc.10" }
 image = "0.25"
 anyhow = "1.0"
-kelp = "0.4"
+kelp = "0.6"
 log = "0.4"
