@@ -1,5 +1,7 @@
 # RawMangaReader
 
+[![Chat](https://img.shields.io/discord/1161119546170687619?logo=discord&style=flat-square)](https://discord.gg/Xx9ENErjfq)
+
 一个支持竖排日文的OCR软件，专为生肉漫画设计。
 
 > [!NOTE]
