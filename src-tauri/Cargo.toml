@@ -1,10 +1,10 @@
 [package]
 name = "raw-manga-reader"
-version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
-license = ""
-repository = ""
+version = "0.1.5"
+description = "A desktop OCR reader for vertical Japanese manga text"
+authors = ["SunDoge"]
+license = "MIT"
+repository = "https://github.com/SunDoge/RawMangaReader"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -13,23 +13,20 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset"] }
+anyhow = "1"
+foyer = "0.22.3"
+image = { workspace = true }
+slotmap = "1"
+tauri = { version = "=2.11.5", features = ["protocol-asset"] }
+tokio = { version = "1", features = ["sync"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-image = { workspace = true }
-# manga-ocr-onnx = { path = "./manga-ocr-onnx" }
-# tauri-plugin-persisted-scope = { git = "https://github.com/tauri-apps/plugins-workspace", branch = "v1" }
-tauri-plugin-aptabase = "1.0"
-log = "0.4"
-base64-simd = "0.8.0"
-thiserror = "1.0.49"
-tauri-plugin-shell = "2"
+ocr = { path = "crates/ocr" }
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls"] }
+sha2 = "0.10"
 tauri-plugin-dialog = "2"
-tauri-plugin-fs = "2"
-ractor = { version = "0.15.6", features = ["async-trait"] }
 tauri-plugin-log = "2"
-tokio = { workspace = true }
-manga-ocr = { path = "./crates/manga-ocr" }
+tauri-plugin-http = "=2.5.9"
 
 [lib]
 name = "app_lib"
@@ -44,14 +41,11 @@ opt-level = 2
 members = [
     "./",
     "crates/imgproc",
-    "crates/manga-ocr",
+    "crates/ocr",
     "crates/text-det",
-    "manga-ocr-onnx",
 ]
+exclude = ["crates/manga-ocr", "manga-ocr-onnx"]
 
 
 [workspace.dependencies]
-ort = { version = "=2.0.0-rc.10" }
 image = { version = "0.25" }
-ractor = { version = "0.15.6", features = ["async-trait"] }
-tokio = { version = "1", features = ["full"] }

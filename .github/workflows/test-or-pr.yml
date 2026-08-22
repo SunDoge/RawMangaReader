@@ -10,7 +10,7 @@ jobs:
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -27,24 +27,25 @@ jobs:
           version: 2.0
 
       - name: Install pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 11
       - name: Setup node
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 22
           cache: "pnpm"
       - name: install frontend dependencies
-        run: pnpm install # change this to npm or pnpm depending on which one you use
+        run: pnpm install --frozen-lockfile
 
-      - name: Cache onnxruntime file
-        uses: actions/cache@v3
-        with:
-          path: onnxruntime.*
-          key: ${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: donwload onnxruntime
-        run: pnpm run download_dylib
+      - name: test frontend
+        run: pnpm test
+
+      - name: build frontend
+        run: pnpm build
+
+      - name: test Rust workspace
+        run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
 
       - uses: tauri-apps/tauri-action@v0
         env:

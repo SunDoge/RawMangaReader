@@ -1,49 +1,38 @@
-import React, { useCallback } from "react";
+import { useCallback } from "react";
 import { IAnnotationType } from "@/types/annotation";
-import style from "./style.module.less";
-import { Button, Popconfirm, Tooltip, message } from "antd";
-import classNames from "classnames";
-import {
-  DeleteOutlined,
-  LoadingOutlined,
-  PlayCircleTwoTone,
-  SnippetsOutlined,
-  SyncOutlined,
-} from "@ant-design/icons";
-// import { copyToClipBoard } from "./utils";
-// import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { Check, Combine, Copy, Languages, LoaderCircle, Play, RotateCcw, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 interface IResultListProps {
   annotations: IAnnotationType[];
   selected?: number;
   onSelect?: (index: number) => void;
   onRemove?: (index: number, length?: number) => void;
+  onUpdate?: (index: number, patch: Partial<IAnnotationType>) => void;
   onOCRClick?: (data: IAnnotationType, index: number) => void;
+  onTranslateAll?: () => void;
+  translating?: boolean;
+  mergeSelection?: ReadonlySet<string>;
+  onMergeSelectionChange?: (id: string, selected: boolean) => void;
+  onMergeSelected?: () => void;
 }
 
-export const ResultList: React.FC<IResultListProps> = (props) => {
-  const { annotations, selected, onOCRClick, onRemove, onSelect } = props;
-
-  const [messageApi, contextHolder] = message.useMessage();
+export function ResultList(props: IResultListProps) {
+  const { annotations, selected, onOCRClick, onRemove, onSelect, onUpdate, onTranslateAll, translating, mergeSelection = new Set<string>(), onMergeSelectionChange, onMergeSelected } = props;
 
   const handleCopyAll = useCallback(async () => {
-    const text = annotations.reduce(
-      (res, anno, index) =>
-      (res += `${index + 1}: ${anno.status === "finished" && !anno.error
-        ? (anno.ocr ?? "").replace(/[\r\n]/g, "")
-        : "NULL"
-        } \n`),
-      ""
-    );
-    // copyToClipBoard(text);
-    // await writeText(text);
-    console.log(text)
-    messageApi.success("全部复制成功");
+    const text = annotations.map((annotation, index) => `${index + 1}: ${annotation.ocr || ""}`).join("\n");
+    await navigator.clipboard.writeText(text);
+    toast.success("已复制全部结果");
   }, [annotations]);
 
   const handleOCRAll = useCallback(() => {
-    annotations.map((anno, index) => onOCRClick?.(anno, index));
-    messageApi.success("全部选中区域开始检测");
+    annotations.forEach((annotation, index) => onOCRClick?.(annotation, index));
   }, [annotations]);
 
   const handleClearAll = useCallback(() => {
@@ -51,106 +40,70 @@ export const ResultList: React.FC<IResultListProps> = (props) => {
   }, [annotations]);
 
   return (
-    <section className={style.resultList}>
-      {contextHolder}
-      <section className={style.header}>
-        <Button size="small" onClick={handleCopyAll}>
-          复制全部
+    <div className="flex h-full min-h-0 flex-col bg-card">
+      <div className="grid grid-cols-5 gap-1.5 border-b p-2">
+        <Button variant="outline" size="xs" onClick={() => void handleCopyAll()} disabled={!annotations.length}><Copy />复制</Button>
+        <Button variant="outline" size="xs" onClick={handleOCRAll} disabled={!annotations.length}><Play />检测</Button>
+        <Button variant="outline" size="xs" onClick={onTranslateAll} disabled={translating || !annotations.some((item) => item.ocr?.trim())}>
+          {translating ? <LoaderCircle className="animate-spin" /> : <Languages />}翻译
         </Button>
-        <Button size="small" onClick={handleOCRAll}>检测全部</Button>
-        <Popconfirm
-          placement="bottomRight"
-          title={"确定要移除当前页的全部选区吗？"}
-          description={"移除当前页的全部选区后不可撤销！"}
-          onConfirm={handleClearAll}
-          okText="移除"
-          cancelText="我再想想"
-          trigger="click"
-        >
-          <Button size="small" danger>移除全部</Button>
-        </Popconfirm>
-      </section>
-      <section className={style.list}>
+        <Button variant="outline" size="xs" onClick={onMergeSelected} disabled={mergeSelection.size < 2}><Combine />合并</Button>
+        <Button variant="destructive" size="xs" onClick={handleClearAll} disabled={!annotations.length}><Trash2 />清空</Button>
+      </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="grid gap-2 p-2">
         {annotations.map((annotation, index) => (
-          <section
-            className={classNames(style.item, {
-              [style.selected]: selected === index,
-            })}
-            key={index}
+          <div
+            className={cn("rounded-lg border p-3 text-left transition hover:bg-muted/60", selected === index && "border-primary bg-primary/5 ring-1 ring-primary/20")}
+            key={annotation.id}
             onClick={() => onSelect?.(index)}
           >
-            <section className="index">{index + 1}</section>
-            <section className="content">
-              <p>OCR: </p>
-              <p>{annotation.ocr}</p>
-            </section>
-            <section className="footer">
-              <span className="status">
-                {(!annotation.status || annotation.status === "unprocessed") &&
-                  "未处理"}
-                {annotation.status === "processing" && "处理中"}
-                {annotation.status === "finished" && (
-                  <>{annotation.error ? "处理失败" : "已处理"}</>
-                )}
-              </span>
-              <span className="operation">
-                <Tooltip title="复制" destroyTooltipOnHide>
-                  <SnippetsOutlined
-                    style={{ color: "#555" }}
-                    onClick={async () =>
-                      // copyToClipBoard(
-                      //   (annotation.ocr || "").replace(/[\r\n]/g, "")
-                      // )
-                      // await writeText(
-                      //   (annotation.ocr || "").replace(/[\r\n]/g, "")
-                      // )
-                      console.log()
-
-                    }
-                  />
-                </Tooltip>
-                <Tooltip
-                  title={
-                    annotation.status === "finished"
-                      ? "重试"
-                      : annotation.status === "processing"
-                        ? "检测中"
-                        : "检测"
-                  }
-                  destroyTooltipOnHide
-                >
-                  {(annotation.status ?? "unprocessed") === "finished" ? (
-                    <SyncOutlined
-                      onClick={() => onOCRClick?.(annotation, index)}
-                      style={{ color: "#1677ff" }}
-                    />
-                  ) : (annotation.status ?? "unprocessed") === "unprocessed" ? (
-                    <PlayCircleTwoTone
-                      onClick={() => onOCRClick?.(annotation, index)}
-                      twoToneColor={annotation.error ? "#FF6F00" : "#1677ff"}
-                    />
-                  ) : (
-                    <LoadingOutlined style={{ color: "#1677ff" }} />
-                  )}
-                </Tooltip>
-
-                <Tooltip title="移除" destroyTooltipOnHide>
-                  <DeleteOutlined
-                    className={style.deleteBtn}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      props.onRemove?.(index);
-                    }}
-                    style={{ color: "#FF0000" }}
-                  />
-                </Tooltip>
-              </span>
-            </section>
-          </section>
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={mergeSelection.has(annotation.id)}
+                  aria-label={`选择区域 ${index + 1} 用于合并`}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => onMergeSelectionChange?.(annotation.id, event.target.checked)}
+                />
+                <Badge variant="secondary">区域 {index + 1}</Badge>
+              </div>
+              <div className="flex items-center gap-1">
+                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-xs" onClick={(event) => { event.stopPropagation(); onOCRClick?.(annotation, index); }}>
+                  {annotation.status === "processing" ? <LoaderCircle className="animate-spin" /> : annotation.status === "finished" ? <RotateCcw /> : <Play />}
+                </Button></TooltipTrigger><TooltipContent>{annotation.status === "finished" ? "重新检测" : "检测"}</TooltipContent></Tooltip>
+                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-xs" onClick={(event) => { event.stopPropagation(); onRemove?.(index); }}><Trash2 className="text-destructive" /></Button></TooltipTrigger><TooltipContent>移除</TooltipContent></Tooltip>
+              </div>
+            </div>
+            <textarea
+              className="min-h-16 w-full resize-y rounded-md border bg-background px-2 py-1.5 text-xs leading-5 outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+              value={annotation.ocr ?? ""}
+              placeholder="尚未识别文本"
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => onUpdate?.(index, { ocr: event.target.value })}
+            />
+            {annotation.translation != null ? (
+              <textarea
+                className="mt-2 min-h-16 w-full resize-y rounded-md border bg-muted/30 px-2 py-1.5 text-xs leading-5 outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+                value={annotation.translation}
+                placeholder="译文"
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => onUpdate?.(index, { translation: event.target.value })}
+              />
+            ) : null}
+            <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
+              {annotation.status === "finished" ? <Check className="size-3 text-emerald-500" /> : null}
+              {annotation.error ? "识别失败" : annotation.status === "processing" ? "处理中" : annotation.status === "finished" ? `已完成${annotation.confidence != null ? ` · ${(annotation.confidence * 100).toFixed(1)}%` : ""}` : "未处理"}
+            </div>
+          </div>
         ))}
-      </section>
-    </section>
+        {!annotations.length ? <div className="grid place-items-center py-16 text-center text-xs text-muted-foreground">在图片上拖动以创建文本区域</div> : null}
+        </div>
+      </ScrollArea>
+    </div>
   );
-};
+}
 
 export default ResultList;

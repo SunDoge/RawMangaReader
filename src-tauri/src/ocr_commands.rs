@@ -1,0 +1,448 @@
+use crate::image_store::{ocr_cache_key, CacheKind, ImageCacheStats, ImageStore, RegisteredImage};
+use crate::network::NetworkState;
+use ocr::{OcrEngine, PageRecognition, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::fs::{self, File};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager, State};
+
+const RELEASE_BASE_URL: &str = "https://github.com/GreatV/oar-ocr/releases/download/v0.7.0";
+
+struct ModelFile {
+    name: &'static str,
+    sha256: &'static str,
+    size: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum OcrModelKind {
+    Small,
+    Medium,
+}
+
+impl OcrModelKind {
+    fn version(self) -> &'static str {
+        match self {
+            Self::Small => "ppocrv6-small-0.7.0",
+            Self::Medium => "ppocrv6-medium-0.7.0",
+        }
+    }
+
+    fn files(self) -> [ModelFile; 3] {
+        let (detection, recognition) = match self {
+            Self::Small => (
+                ModelFile {
+                    name: "pp-ocrv6_small_det.onnx",
+                    sha256: "d73e0058b7a8086bbd57f3d10b8bcd4ff95363f67e06e2762b5e814fe9c9410e",
+                    size: 9_880_512,
+                },
+                ModelFile {
+                    name: "pp-ocrv6_small_rec.onnx",
+                    sha256: "5435fd747c9e0efe15a96d0b378d5bd157e9492ed8fd80edf08f30d02fa24634",
+                    size: 21_159_378,
+                },
+            ),
+            Self::Medium => (
+                ModelFile {
+                    name: "pp-ocrv6_medium_det.onnx",
+                    sha256: "eb13b44b25bb36f89528b68720af8a61d9cf381176107f465db1757b65d086e1",
+                    size: 62_032_837,
+                },
+                ModelFile {
+                    name: "pp-ocrv6_medium_rec.onnx",
+                    sha256: "9c09abf0957f7968c7586464b7397b84ad2387a0497a351af40e9acc71b673ba",
+                    size: 76_554_979,
+                },
+            ),
+        };
+        [
+            detection,
+            recognition,
+            ModelFile {
+                name: CHARACTER_DICTIONARY,
+                sha256: "b5f2bfe2bdd9448429e3e82b51c789775d9b42f2403d082b00662eb77e401c5d",
+                size: 74_947,
+            },
+        ]
+    }
+}
+
+pub struct OcrState {
+    engine: Mutex<Option<(OcrModelKind, OcrEngine)>>,
+    download_lock: Mutex<()>,
+}
+
+impl Default for OcrState {
+    fn default() -> Self {
+        Self {
+            engine: Mutex::new(None),
+            download_lock: Mutex::new(()),
+        }
+    }
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelStatus {
+    kind: OcrModelKind,
+    installed: bool,
+    ready: bool,
+    version: &'static str,
+    downloaded_bytes: u64,
+    total_bytes: u64,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ModelProgress {
+    file: String,
+    downloaded_bytes: u64,
+    total_bytes: u64,
+}
+
+pub(crate) fn model_directory(app: &AppHandle, kind: OcrModelKind) -> Result<PathBuf, String> {
+    app.path()
+        .app_data_dir()
+        .map(|path| path.join("models").join(kind.version()))
+        .map_err(|error| error.to_string())
+}
+
+fn total_model_bytes(kind: OcrModelKind) -> u64 {
+    kind.files().iter().map(|file| file.size).sum()
+}
+
+fn sha256_file(path: &Path) -> Result<String, String> {
+    let mut file = File::open(path).map_err(|error| error.to_string())?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut buffer).map_err(|error| error.to_string())?;
+        if read == 0 {
+            break;
+        }
+        digest.update(&buffer[..read]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn file_is_valid(directory: &Path, model_file: &ModelFile) -> bool {
+    let path = directory.join(model_file.name);
+    path.metadata()
+        .is_ok_and(|metadata| metadata.len() == model_file.size)
+        && sha256_file(&path).is_ok_and(|hash| hash == model_file.sha256)
+}
+
+fn model_status_at(directory: &Path, kind: OcrModelKind, ready: bool) -> ModelStatus {
+    let files = kind.files();
+    let downloaded_bytes = files
+        .iter()
+        .filter(|file| file_is_valid(directory, file))
+        .map(|file| file.size)
+        .sum();
+    ModelStatus {
+        kind,
+        installed: downloaded_bytes == total_model_bytes(kind),
+        ready,
+        version: kind.version(),
+        downloaded_bytes,
+        total_bytes: total_model_bytes(kind),
+    }
+}
+
+#[tauri::command]
+pub async fn get_ocr_model_status(
+    app: AppHandle,
+    state: State<'_, Arc<OcrState>>,
+    kind: OcrModelKind,
+) -> Result<ModelStatus, String> {
+    let directory = model_directory(&app, kind)?;
+    let ready = state
+        .engine
+        .lock()
+        .map_err(|_| "OCR state lock is poisoned".to_string())?
+        .as_ref()
+        .is_some_and(|(loaded, _)| *loaded == kind);
+    tauri::async_runtime::spawn_blocking(move || model_status_at(&directory, kind, ready))
+        .await
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn download_ocr_model(
+    app: AppHandle,
+    state: State<'_, Arc<OcrState>>,
+    network: State<'_, NetworkState>,
+    kind: OcrModelKind,
+) -> Result<ModelStatus, String> {
+    let state = Arc::clone(state.inner());
+    let directory = model_directory(&app, kind)?;
+    let client = network.blocking_client("RawMangaReader/0.1")?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let _download_guard = state
+            .download_lock
+            .lock()
+            .map_err(|_| "OCR download lock is poisoned".to_string())?;
+        fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+        let files = kind.files();
+        let mut completed_bytes = files
+            .iter()
+            .filter(|file| file_is_valid(&directory, file))
+            .map(|file| file.size)
+            .sum::<u64>();
+
+        for model_file in &files {
+            if file_is_valid(&directory, model_file) {
+                continue;
+            }
+            let target = directory.join(model_file.name);
+            let partial = directory.join(format!("{}.part", model_file.name));
+            let url = format!("{RELEASE_BASE_URL}/{}", model_file.name);
+            let mut response = client
+                .get(url)
+                .send()
+                .and_then(reqwest::blocking::Response::error_for_status)
+                .map_err(|error| format!("failed to download {}: {error}", model_file.name))?;
+            let mut output = File::create(&partial).map_err(|error| error.to_string())?;
+            let mut file_bytes = 0_u64;
+            let mut buffer = [0_u8; 64 * 1024];
+            loop {
+                let read = response
+                    .read(&mut buffer)
+                    .map_err(|error| error.to_string())?;
+                if read == 0 {
+                    break;
+                }
+                output
+                    .write_all(&buffer[..read])
+                    .map_err(|error| error.to_string())?;
+                file_bytes += read as u64;
+                let _ = app.emit(
+                    "ocr-model-progress",
+                    ModelProgress {
+                        file: model_file.name.to_owned(),
+                        downloaded_bytes: completed_bytes + file_bytes,
+                        total_bytes: total_model_bytes(kind),
+                    },
+                );
+            }
+            output.sync_all().map_err(|error| error.to_string())?;
+            if partial.metadata().map_err(|error| error.to_string())?.len() != model_file.size
+                || sha256_file(&partial)? != model_file.sha256
+            {
+                let _ = fs::remove_file(&partial);
+                return Err(format!("model checksum failed: {}", model_file.name));
+            }
+            if target.exists() {
+                fs::remove_file(&target).map_err(|error| error.to_string())?;
+            }
+            fs::rename(&partial, &target).map_err(|error| error.to_string())?;
+            completed_bytes += model_file.size;
+        }
+
+        *state
+            .engine
+            .lock()
+            .map_err(|_| "OCR state lock is poisoned".to_string())? = None;
+        Ok(model_status_at(&directory, kind, false))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub async fn remove_ocr_model(
+    app: AppHandle,
+    state: State<'_, Arc<OcrState>>,
+    kind: OcrModelKind,
+) -> Result<ModelStatus, String> {
+    let state = Arc::clone(state.inner());
+    let directory = model_directory(&app, kind)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        *state
+            .engine
+            .lock()
+            .map_err(|_| "OCR state lock is poisoned".to_string())? = None;
+        if directory.exists() {
+            fs::remove_dir_all(&directory).map_err(|error| error.to_string())?;
+        }
+        Ok(model_status_at(&directory, kind, false))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+pub(crate) fn with_engine<T>(
+    state: &OcrState,
+    directory: &Path,
+    kind: OcrModelKind,
+    operation: impl FnOnce(&OcrEngine) -> anyhow::Result<T>,
+) -> Result<T, String> {
+    let mut engine = state
+        .engine
+        .lock()
+        .map_err(|_| "OCR state lock is poisoned".to_string())?;
+    if engine.as_ref().is_none_or(|(loaded, _)| *loaded != kind) {
+        if !kind
+            .files()
+            .iter()
+            .all(|file| file_is_valid(directory, file))
+        {
+            return Err("OCR 模型尚未下载或校验失败".to_string());
+        }
+        let files = kind.files();
+        *engine = Some((
+            kind,
+            OcrEngine::new_with_models(directory, files[0].name, files[1].name)
+                .map_err(|error| error.to_string())?,
+        ));
+    }
+    operation(&engine.as_ref().expect("OCR engine initialized").1)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn recognize_page(
+    app: AppHandle,
+    state: State<'_, Arc<OcrState>>,
+    images: State<'_, Arc<ImageStore>>,
+    image_id: String,
+    merge_options: Option<ocr::VerticalMergeOptions>,
+    kind: OcrModelKind,
+) -> Result<PageRecognition, String> {
+    let state = Arc::clone(state.inner());
+    let images = Arc::clone(images.inner());
+    let directory = model_directory(&app, kind)?;
+    recognize_page_cached(
+        state,
+        images,
+        directory,
+        image_id,
+        merge_options.unwrap_or_default(),
+        kind,
+    )
+    .await
+}
+
+pub(crate) async fn recognize_page_cached(
+    state: Arc<OcrState>,
+    images: Arc<ImageStore>,
+    directory: PathBuf,
+    image_id: String,
+    merge_options: ocr::VerticalMergeOptions,
+    kind: OcrModelKind,
+) -> Result<PageRecognition, String> {
+    let ocr_cache = images.ocr_cache().clone();
+    let fingerprint = images
+        .fingerprint(&image_id)
+        .map_err(|error| error.to_string())?;
+    let cache_key = ocr_cache_key(&fingerprint, kind.version(), &merge_options)
+        .map_err(|error| error.to_string())?;
+    if let Some(entry) = ocr_cache
+        .get(&cache_key)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        if let Ok(cached) = serde_json::from_slice(&entry) {
+            return Ok(cached);
+        }
+        ocr_cache.remove(&cache_key);
+    }
+
+    let worker_images = Arc::clone(&images);
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let image = worker_images
+            .decoded(&image_id)
+            .map_err(|error| error.to_string())?;
+        with_engine(&state, &directory, kind, |engine| {
+            engine.recognize_page_image_with_debug(&image, merge_options)
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let encoded = serde_json::to_vec(&result).map_err(|error| error.to_string())?;
+    ocr_cache.insert(cache_key, encoded);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn recognize_region(
+    app: AppHandle,
+    state: State<'_, Arc<OcrState>>,
+    images: State<'_, Arc<ImageStore>>,
+    image_id: String,
+    rect: RelativeRect,
+    kind: OcrModelKind,
+) -> Result<RegionRecognition, String> {
+    let state = Arc::clone(state.inner());
+    let images = Arc::clone(images.inner());
+    let directory = model_directory(&app, kind)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let image = images
+            .decoded(&image_id)
+            .map_err(|error| error.to_string())?;
+        with_engine(&state, &directory, kind, |engine| {
+            engine.recognize_region_image(&image, rect)
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+pub fn register_images(
+    images: State<'_, Arc<ImageStore>>,
+    paths: Vec<String>,
+) -> Result<Vec<RegisteredImage>, String> {
+    images
+        .register_paths(paths)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn release_images(
+    images: State<'_, Arc<ImageStore>>,
+    image_ids: Vec<String>,
+) -> Result<(), String> {
+    images
+        .release(&image_ids)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_image_cache_stats(
+    images: State<'_, Arc<ImageStore>>,
+) -> Result<ImageCacheStats, String> {
+    images.stats().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn clear_image_cache(
+    images: State<'_, Arc<ImageStore>>,
+    kind: CacheKind,
+) -> Result<ImageCacheStats, String> {
+    images
+        .clear(kind)
+        .await
+        .map_err(|error| error.to_string())?;
+    images.stats().map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_size_matches_known_assets() {
+        assert_eq!(total_model_bytes(OcrModelKind::Small), 31_114_837);
+        assert_eq!(total_model_bytes(OcrModelKind::Medium), 138_662_763);
+        assert!(OcrModelKind::Small
+            .files()
+            .iter()
+            .chain(OcrModelKind::Medium.files().iter())
+            .all(|file| file.sha256.len() == 64));
+    }
+}

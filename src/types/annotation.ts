@@ -1,16 +1,14 @@
-import { IArea } from "@bmunozg/react-image-area";
-
-export type IBBoxType = {
+export type IAnnotationType = {
   x: number;
   y: number;
   width: number;
   height: number;
   id: string;
-};
-
-export type IAnnotationType = IArea & {
-  status?: 'unprocessed' | 'processing' | 'finished';
+  unit: "%";
+  status?: "unprocessed" | "processing" | "finished";
   ocr?: string;
-  translate?: string;
+  translation?: string;
+  confidence?: number;
+  polygon?: Array<{ x: number; y: number }>;
   error?: boolean;
-}
+};

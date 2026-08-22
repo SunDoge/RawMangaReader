@@ -1,17 +1,19 @@
-import classNames from "classnames";
-import { RouterProvider } from 'react-router-dom';
-import { router } from "./router";
-import style from './style.module.less';
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/sonner";
+import { HashRouter, Route, Routes } from "react-router";
+import Home from "@/pages/home";
 
 function App() {
   return (
-    <div className={classNames(style.app, 'app')}>
-      <RouterProvider router={router} />
-    </div>
+    <TooltipProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/*" element={<Home />} />
+        </Routes>
+      </HashRouter>
+      <Toaster position="bottom-right" richColors />
+    </TooltipProvider>
   );
 }
-
-
-
 
 export default App;
