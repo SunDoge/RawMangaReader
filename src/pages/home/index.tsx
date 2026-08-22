@@ -304,7 +304,7 @@ export default function Home() {
       const baseName = image.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || `page-${currentIndex + 1}`;
       const outputPath = await save({ defaultPath: `${baseName}-translated.png`, filters: [{ name: "PNG 图片", extensions: ["png"] }] });
       if (!outputPath) return;
-      const bytes = await renderTranslatedPng(image.path, currentAnnotations, translationOverlayOptions);
+      const bytes = await renderTranslatedPng(image.id, image.path, currentAnnotations, translationOverlayOptions);
       await writeExportedImage(outputPath, bytes);
       toast.success("嵌字图片已导出", { description: outputPath });
     } catch (error) {

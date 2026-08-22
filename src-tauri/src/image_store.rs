@@ -165,6 +165,12 @@ impl ImageStore {
         Ok(image)
     }
 
+    pub fn original_bytes(&self, id: &str) -> Result<Vec<u8>> {
+        let resource = self.resource(id)?;
+        fs::read(&resource.path)
+            .with_context(|| format!("failed to read image: {}", resource.path.display()))
+    }
+
     pub fn ocr_cache(&self) -> &HybridCache<String, Vec<u8>> {
         &self.ocr
     }
@@ -300,12 +306,17 @@ mod tests {
             store.decoded(&registered[0].id).unwrap().dimensions(),
             (2, 3)
         );
+        assert!(store
+            .original_bytes(&registered[0].id)
+            .unwrap()
+            .starts_with(b"\x89PNG"));
         let stats = store.stats().unwrap();
         assert_eq!(stats.active_images, 1);
         assert_eq!(stats.decoded_entries, 1);
         assert_eq!(stats.decoded_bytes, 18);
         store.release(&[registered[0].id.clone()]).unwrap();
         assert!(store.decoded(&registered[0].id).is_err());
+        assert!(store.original_bytes(&registered[0].id).is_err());
         assert_eq!(store.stats().unwrap().active_images, 0);
 
         store.ocr.insert("page-key".to_owned(), vec![1, 2, 3]);
