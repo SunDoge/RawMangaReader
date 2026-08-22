@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Database, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Clock3, Database, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
@@ -24,12 +24,14 @@ import { compareOpenRouterModels, translateWithOpenRouter } from "@/features/tra
 import { parseComparisonModels, type TranslationSettings } from "@/features/translation/settings";
 import type { TranslationOverlayOptions } from "@/features/translation/overlay";
 import { DEFAULT_APP_PREFERENCES, formatAppError, loadPreferences, savePreferences } from "@/features/preferences";
+import { addRecentSources, loadRecentSources, saveRecentSources, sourceName, type RecentSource } from "@/features/recent-sources";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort, prioritizeImageIds } from "./utils";
 
 export default function Home() {
   const [initialPreferences] = useState(() => loadPreferences(localStorage));
   const [images, setImages] = useState<RegisteredImage[]>([]);
+  const [recentSources, setRecentSources] = useState<RecentSource[]>(() => loadRecentSources(localStorage));
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
@@ -114,31 +116,65 @@ export default function Home() {
     }
   }, []);
 
+  const updateRecentSources = useCallback((update: (current: RecentSource[]) => RecentSource[]) => {
+    setRecentSources((current) => {
+      const next = update(current);
+      saveRecentSources(localStorage, next);
+      return next;
+    });
+  }, []);
+
+  const recordRecentSources = useCallback((sources: Array<Pick<RecentSource, "kind" | "path">>) => {
+    updateRecentSources((current) => addRecentSources(current, sources));
+  }, [updateRecentSources]);
+
+  const imagePathsInFolder = useCallback(async (folder: string) => {
+    const entries = await readDir(folder);
+    return Promise.all(entries.filter((entry) => entry.isFile && isSupportedImage(entry.name)).map((entry) => join(folder, entry.name)));
+  }, []);
+
   const openImages = useCallback(async () => {
     const selected = await open({ multiple: true, filters: [{ name: "图片", extensions: ["jpg", "jpeg", "png", "webp", "bmp", "gif", "avif"] }] });
     if (!selected) return;
     try {
-      await loadImages(Array.isArray(selected) ? selected : [selected]);
+      const paths = Array.isArray(selected) ? selected : [selected];
+      await loadImages(paths);
+      recordRecentSources(paths.map((path) => ({ kind: "file", path })));
     } catch (error) {
       toast.error("无法注册图片资源", { description: formatAppError(error) });
     }
-  }, [loadImages]);
+  }, [loadImages, recordRecentSources]);
 
   const openFolder = useCallback(async () => {
     const selected = await open({ directory: true, multiple: false });
     if (!selected || Array.isArray(selected)) return;
-    const entries = await readDir(selected);
-    const paths = await Promise.all(entries.filter((entry) => entry.isFile && isSupportedImage(entry.name)).map((entry) => join(selected, entry.name)));
+    const paths = await imagePathsInFolder(selected);
     if (!paths.length) {
       toast.error("这个文件夹里没有支持的图片");
       return;
     }
     try {
       await loadImages(paths);
+      recordRecentSources([{ kind: "folder", path: selected }]);
     } catch (error) {
       toast.error("无法注册图片资源", { description: formatAppError(error) });
     }
-  }, [loadImages]);
+  }, [imagePathsInFolder, loadImages, recordRecentSources]);
+
+  const openRecentSource = useCallback(async (source: RecentSource) => {
+    try {
+      const paths = source.kind === "folder" ? await imagePathsInFolder(source.path) : [source.path];
+      if (!paths.length) throw new Error("文件夹中没有支持的图片");
+      await loadImages(paths);
+      recordRecentSources([{ kind: source.kind, path: source.path }]);
+    } catch (error) {
+      toast.error("无法打开历史项目", { description: formatAppError(error) });
+    }
+  }, [imagePathsInFolder, loadImages, recordRecentSources]);
+
+  const removeRecentSource = useCallback((source: RecentSource) => {
+    updateRecentSources((current) => current.filter((item) => item.kind !== source.kind || item.path !== source.path));
+  }, [updateRecentSources]);
 
   const selectImage = useCallback((index: number) => {
     if (index < 0 || index >= images.length) return;
@@ -258,14 +294,26 @@ export default function Home() {
           <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} translationOverlayOptions={translationOverlayOptions} /></section>
         </div>
       ) : (
-        <section className="relative grid min-h-0 flex-1 place-items-center overflow-hidden p-8">
+        <section className="relative min-h-0 flex-1 overflow-y-auto p-8">
           <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-muted)_0,transparent_65%)] opacity-70" />
-          <div className="relative flex max-w-lg flex-col items-center text-center">
+          <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
             <div className="mb-6 grid size-20 place-items-center rounded-3xl border bg-card shadow-sm"><ImagePlus className="size-9 text-muted-foreground" /></div>
             <Badge variant="outline" className="mb-3">Tauri 2 · React 19</Badge>
             <h1 className="text-3xl font-semibold tracking-tight">开始阅读与标注</h1>
             <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">选择漫画图片或整个文件夹，下载 PP-OCRv6 模型后即可整页识别；也可以在画面上拖动并单独识别文本区域。</p>
             <div className="mt-7 flex flex-wrap justify-center gap-2">{actions}</div>
+            {recentSources.length ? <div className="mt-10 w-full text-left">
+              <div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-medium"><Clock3 className="size-4 text-muted-foreground" />最近打开</h2><Button variant="ghost" size="xs" onClick={() => updateRecentSources(() => [])}><Trash2 />清空历史</Button></div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {recentSources.map((source) => <div key={`${source.kind}:${source.path}`} className="group flex min-w-0 items-center rounded-lg border bg-card/80 shadow-sm transition hover:border-primary/40 hover:bg-card">
+                  <button className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left" onClick={() => void openRecentSource(source)} title={source.path}>
+                    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-muted">{source.kind === "folder" ? <FolderOpen className="size-4" /> : <FileImage className="size-4" />}</span>
+                    <span className="min-w-0"><span className="block truncate text-sm font-medium">{sourceName(source.path)}</span><span className="block truncate text-xs text-muted-foreground">{source.path}</span></span>
+                  </button>
+                  <Button className="mr-2 opacity-0 transition group-hover:opacity-100 focus:opacity-100" variant="ghost" size="icon-xs" aria-label={`移除 ${sourceName(source.path)}`} onClick={() => removeRecentSource(source)}><X /></Button>
+                </div>)}
+              </div>
+            </div> : null}
           </div>
         </section>
       )}
