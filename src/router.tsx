@@ -1,6 +1,5 @@
 import Home from '@/pages/home';
 import { createBrowserRouter } from 'react-router-dom';
-import { ClipboardPage } from './pages/clipboard';
 
 
 export const router = createBrowserRouter([
@@ -11,10 +10,5 @@ export const router = createBrowserRouter([
     {
         path: '/home',
         element: <Home />
-    },
-    {
-        path: '/clipboard',
-        element: <ClipboardPage />
     }
 ])
-
