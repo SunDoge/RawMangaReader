@@ -1,281 +1,132 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { IThumbnailListProps } from "../thumbnail-list";
-import { IAnnotationType } from "@/types/annotation";
-import { Pagination, message } from "antd";
-import classNames from "classnames";
-import style from "./style.module.less";
-import {
-  AreaSelector,
-  IArea,
-  IAreaRendererProps,
-} from "@bmunozg/react-image-area";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useSize, useThrottleEffect } from "ahooks";
-import { processPercent2Pixel, processPixel2Percent } from "./utils";
-import { AnnotationSelector } from "../annotation-selector";
-import ResultList from "../result-list";
+import { ChevronLeft, ChevronRight, MousePointer2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import type { IAnnotationType } from "@/types/annotation";
+import type { IThumbnailListProps } from "@/components/thumbnail-list";
+import { ResultList } from "@/components/result-list";
+import { createAnnotation, isUsableAnnotation, type RelativePoint } from "./utils";
 
-interface IProps extends IThumbnailListProps {
-  annotationList?: IAnnotationType[];
-  onAnnotationListChange?: (list: IAnnotationType[]) => void;
-  onOCR?: (annotation: IAnnotationType) => Promise<{
-    status?: "unprocessed" | "processing" | "finished";
-    ocr?: string;
-    translate?: string;
-  }>;
+interface AnnotationBlockProps extends IThumbnailListProps {
+  annotationList: IAnnotationType[];
+  onAnnotationListChange: (list: IAnnotationType[]) => void;
+  onOCR: (annotation: IAnnotationType) => Promise<Partial<IAnnotationType>>;
 }
 
-export const AnnotationBlock: React.FC<IProps> = (props) => {
-  const {
-    currentIndex,
-    imageList,
-    annotationList = [],
-    onSelected,
-    onAnnotationListChange,
-    onOCR,
-  } = props;
-
-  const containerRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
-
-  const [areas, setAreas] = useState<IArea[]>([]);
-  const [annotationSelected, setAnnotationSelected] = useState<number>(-1);
-
-  const [imageSize, setImageSize] = useState<{
-    width: number;
-    height: number;
-  }>();
-  const containerSize = useSize(containerRef);
-
-  const [messageApi, contextHolder] = message.useMessage();
+export function AnnotationBlock({
+  currentIndex,
+  imageList,
+  annotationList,
+  onSelected,
+  onAnnotationListChange,
+  onOCR,
+}: AnnotationBlockProps) {
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [selected, setSelected] = useState(-1);
+  const [start, setStart] = useState<RelativePoint | null>(null);
+  const [draft, setDraft] = useState<IAnnotationType | null>(null);
 
   useEffect(() => {
-    if (containerSize && imageSize) {
-      const result = processPercent2Pixel(
-        containerSize,
-        imageSize,
-        annotationList as (Omit<IArea, "unit"> & { unit: "%" })[]
-      );
-      setAreas(result);
-      setAnnotationSelected(-1);
-    }
-  }, [containerSize, imageSize, currentIndex]);
+    setSelected(-1);
+    setDraft(null);
+  }, [currentIndex]);
 
-  // img onLoad 和 size 变动时调用
-  const handleImageSize = () => {
-    if (imageRef.current && containerSize) {
-      const oriWidth = imageRef.current.naturalWidth;
-      const oriHeight = imageRef.current.naturalHeight;
-      // console.log(containerSize, oriHeight, oriWidth)
-      if (oriHeight / oriWidth > containerSize.height / containerSize.width) {
-        // 原图比容器高，以容器高为准
-        setImageSize({
-          width: (oriWidth / oriHeight) * containerSize.height,
-          height: containerSize.height,
-        });
-      } else {
-        // 原图比容器窄，以容器宽为准
-        setImageSize({
-          width: containerSize.width,
-          height: (oriHeight / oriWidth) * containerSize.width,
-        });
-      }
-    }
-  }
-
-  // 计算image的大小
-  useEffect(() => {
-    handleImageSize()
-  }, [imageRef.current, containerSize]);
-
-  const onChangeHandler = (_areas: IArea[]) => {
-    if (areas.length < _areas.length) {
-      setAnnotationSelected(_areas.length - 1);
-    }
-    setAreas(_areas);
+  const pointFromEvent = (event: React.PointerEvent): RelativePoint => {
+    const rect = overlayRef.current!.getBoundingClientRect();
+    return {
+      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
+      y: Math.min(1, Math.max(0, (event.clientY - rect.top) / rect.height)),
+    };
   };
 
-  const handleAnnotationChange = useCallback(
-    (annotation: IAnnotationType, index: number) => {
-      setAreas((areas) => {
-        const newAreas = [...areas];
-        newAreas.splice(index, 1, { ...areas[index], ...annotation });
-        return newAreas;
-      });
-      setAnnotationSelected(index);
-    },
-    []
-  );
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || event.target !== event.currentTarget) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const point = pointFromEvent(event);
+    setStart(point);
+    setDraft(createAnnotation(point, point, crypto.randomUUID()));
+  };
 
-  const handleAnnotationRemove = useCallback(
-    (index: number, length?: number) => {
-      setAreas((areas) => {
-        const newAreas = [...areas];
-        newAreas.splice(index, length ?? 1);
-        // console.log(newAreas);
-        return newAreas;
-      });
-      setAnnotationSelected(-1);
-    },
-    []
-  );
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!start) return;
+    const point = pointFromEvent(event);
+    setDraft((current) => current ? createAnnotation(start, point, current.id) : null);
+  };
 
-  const handleAnnotationOCR = useCallback(
-    async (annotation: IAnnotationType, index: number) => {
-      if (containerSize && imageSize) {
-        setAreas((areas) => {
-          const newAreas = [...areas] as IAnnotationType[];
-          newAreas.splice(index, 1, {
-            ...areas[index],
-            ...annotation,
-            status: "processing",
-            ocr: "",
-            translate: "",
-            error: false,
-          });
-          return newAreas;
-        });
-        const processed = processPixel2Percent(containerSize, imageSize, [
-          annotation,
-        ] as (Omit<IArea, "unit"> & { unit: "px" })[]);
-        try {
-          const result = await onOCR?.(processed[0]);
-          // messageApi.success(`模型识别结果${result}`);
-          setAreas((areas) => {
-            const newAreas = [...areas] as IAnnotationType[];
-            newAreas.splice(index, 1, {
-              ...areas[index],
-              ...annotation,
-              status: "finished",
-              ocr: result as string,
-              translate: result as string,
-              error: false,
-            });
-            return newAreas;
-          });
-        } catch (e) {
-          if ((e as any).message === 'MODEL_ERROR') {
-            messageApi.error("请先加载模型！");
-          } else {
-            messageApi.error("模型识别错误");
-          }
-          setAreas((areas) => {
-            const newAreas = [...areas] as IAnnotationType[];
-            newAreas.splice(index, 1, {
-              ...areas[index],
-              ...annotation,
-              status: "unprocessed",
-              ocr: "",
-              translate: "",
-              error: true,
-            });
-            return newAreas;
-          });
-        }
-      }
-    },
-    [onOCR, containerSize, imageSize]
-  );
+  const handlePointerUp = () => {
+    if (draft && isUsableAnnotation(draft)) {
+      const next = [...annotationList, draft];
+      onAnnotationListChange(next);
+      setSelected(next.length - 1);
+    }
+    setStart(null);
+    setDraft(null);
+  };
 
-  // 计算 bbox 后的实际大小，节流然后向上回调 bboxs
-  useThrottleEffect(
-    () => {
-      if (
-        areas.every((area) => !area.isNew && !area.isChanging) &&
-        containerSize &&
-        imageSize
-      ) {
-        // 稳定下来后再通知上层数据变化
-        // 开始数据处理，像素转百分比
-        const processed = processPixel2Percent(
-          containerSize,
-          imageSize,
-          areas as (Omit<IArea, "unit"> & { unit: "px" })[]
-        );
-        onAnnotationListChange?.(processed);
-      }
-    },
-    [areas, containerSize, imageSize],
-    { wait: 500 }
-  );
+  const removeAnnotation = useCallback((index: number, length = 1) => {
+    const next = annotationList.filter((_, itemIndex) => itemIndex < index || itemIndex >= index + length);
+    onAnnotationListChange(next);
+    setSelected(-1);
+  }, [annotationList, onAnnotationListChange]);
 
-  const CustomSelectorRender = useMemo(() => {
-    return (props: IAreaRendererProps) => {
-      const { areaNumber } = props;
+  const processAnnotation = useCallback(async (annotation: IAnnotationType, index: number) => {
+    const processing = annotationList.map((item, itemIndex) => itemIndex === index ? { ...item, status: "processing" as const } : item);
+    onAnnotationListChange(processing);
+    try {
+      const result = await onOCR(annotation);
+      onAnnotationListChange(processing.map((item, itemIndex) => itemIndex === index ? { ...item, ...result, status: "finished" } : item));
+    } catch {
+      onAnnotationListChange(processing.map((item, itemIndex) => itemIndex === index ? { ...item, status: "unprocessed", error: true } : item));
+    }
+  }, [annotationList, onAnnotationListChange, onOCR]);
 
-      return (
-        <AnnotationSelector
-          key={props.areaNumber}
-          index={areaNumber - 1}
-          selected={annotationSelected === areaNumber - 1}
-          onSelect={(index) => setAnnotationSelected(index)}
-          annotation={areas[areaNumber - 1]}
-          onChange={handleAnnotationChange}
-          onRemove={handleAnnotationRemove}
-          onOCRClick={handleAnnotationOCR}
-        />
-      );
-    };
-  }, [
-    onOCR,
-    areas,
-    annotationSelected,
-    handleAnnotationChange,
-    handleAnnotationRemove,
-  ]);
+  const visibleAnnotations = draft ? [...annotationList, draft] : annotationList;
 
   return (
-    <section className={classNames(style.annotationBlock, "annotation-block")}>
-      {contextHolder}
-      <section className="main">
-        <section className="draw">
-          <div className={style.areaSelector} ref={containerRef}>
-            <AreaSelector
-              globalAreaStyle={{
-                backgroundColor: "rgba(0,133,242,.1)",
-              }}
-              mediaWrapperClassName="object-contain" // wrong
-              areas={areas}
-              onChange={onChangeHandler}
-              customAreaRenderer={CustomSelectorRender}
-              unit="pixel" // 这里用像素方便计算，传到外面用 百分比
-            // debug
+    <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="flex min-h-0 flex-col bg-muted/20">
+        <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-5">
+          <div className="relative inline-flex max-h-full max-w-full overflow-hidden rounded-md bg-black shadow-2xl">
+            <img className="block max-h-[calc(100vh-9rem)] max-w-full select-none object-contain" src={convertFileSrc(imageList[currentIndex])} alt={`第 ${currentIndex + 1} 页`} draggable={false} />
+            <div
+              ref={overlayRef}
+              className="absolute inset-0 cursor-crosshair touch-none select-none"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
             >
-              <img
-                ref={imageRef}
-                src={convertFileSrc(imageList[currentIndex])}
-                alt=""
-                className="object-contain"
-                onLoad={handleImageSize}
-              />
-            </AreaSelector>
+              {visibleAnnotations.map((annotation, index) => (
+                <button
+                  key={annotation.id}
+                  className={cn("absolute border-2 border-primary bg-primary/10 transition hover:bg-primary/20", selected === index && "border-amber-400 bg-amber-400/20 ring-2 ring-black/40")}
+                  style={{ left: `${annotation.x * 100}%`, top: `${annotation.y * 100}%`, width: `${annotation.width * 100}%`, height: `${annotation.height * 100}%` }}
+                  onPointerDown={(event) => event.stopPropagation()}
+                  onClick={() => setSelected(index)}
+                  aria-label={`选择区域 ${index + 1}`}
+                >
+                  <Badge className="absolute -top-6 left-0 h-5 rounded-sm bg-amber-500 px-1.5 text-[10px] text-black">{index + 1}</Badge>
+                </button>
+              ))}
+            </div>
           </div>
-        </section>
-        <section className="footer">
-          <Pagination
-            current={currentIndex + 1}
-            onChange={(page) => onSelected?.(page - 1)}
-            total={imageList?.length || 0}
-            pageSize={1}
-            showQuickJumper={imageList?.length > 50}
-          />
-        </section>
-      </section>
-      <section className="result">
-        <ResultList
-          annotations={areas}
-          selected={annotationSelected}
-          onSelect={(index) => setAnnotationSelected(index)}
-          onRemove={handleAnnotationRemove}
-          onOCRClick={handleAnnotationOCR}
-        />
-      </section>
-    </section>
+          {!annotationList.length && !draft ? (
+            <div className="pointer-events-none absolute bottom-8 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border bg-background/90 px-3 py-1.5 text-xs text-muted-foreground shadow-sm backdrop-blur">
+              <MousePointer2 className="size-3.5" /> 在图片上拖动创建文本区域
+            </div>
+          ) : null}
+        </div>
+        <div className="flex h-11 shrink-0 items-center justify-center gap-3 border-t bg-background px-3">
+          <Button variant="ghost" size="icon-sm" onClick={() => onSelected(currentIndex - 1)} disabled={currentIndex === 0}><ChevronLeft /></Button>
+          <span className="min-w-24 text-center text-xs text-muted-foreground"><strong className="text-foreground">{currentIndex + 1}</strong> / {imageList.length}</span>
+          <Button variant="ghost" size="icon-sm" onClick={() => onSelected(currentIndex + 1)} disabled={currentIndex === imageList.length - 1}><ChevronRight /></Button>
+        </div>
+      </div>
+      <aside className="min-h-0 border-l">
+        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} />
+      </aside>
+    </div>
   );
-};
+}
