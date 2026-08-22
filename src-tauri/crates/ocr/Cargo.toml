@@ -5,4 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+anyhow = "1"
+image = { workspace = true }
 oar-ocr = "0.9.2"
+serde = { version = "1", features = ["derive"] }

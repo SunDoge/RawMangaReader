@@ -13,11 +13,12 @@ interface IResultListProps {
   selected?: number;
   onSelect?: (index: number) => void;
   onRemove?: (index: number, length?: number) => void;
+  onUpdate?: (index: number, patch: Partial<IAnnotationType>) => void;
   onOCRClick?: (data: IAnnotationType, index: number) => void;
 }
 
 export function ResultList(props: IResultListProps) {
-  const { annotations, selected, onOCRClick, onRemove, onSelect } = props;
+  const { annotations, selected, onOCRClick, onRemove, onSelect, onUpdate } = props;
 
   const handleCopyAll = useCallback(async () => {
     const text = annotations.map((annotation, index) => `${index + 1}: ${annotation.ocr || ""}`).join("\n");
@@ -43,7 +44,7 @@ export function ResultList(props: IResultListProps) {
       <ScrollArea className="min-h-0 flex-1">
         <div className="grid gap-2 p-2">
         {annotations.map((annotation, index) => (
-          <button
+          <div
             className={cn("rounded-lg border p-3 text-left transition hover:bg-muted/60", selected === index && "border-primary bg-primary/5 ring-1 ring-primary/20")}
             key={annotation.id}
             onClick={() => onSelect?.(index)}
@@ -57,12 +58,18 @@ export function ResultList(props: IResultListProps) {
                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-xs" onClick={(event) => { event.stopPropagation(); onRemove?.(index); }}><Trash2 className="text-destructive" /></Button></TooltipTrigger><TooltipContent>移除</TooltipContent></Tooltip>
               </div>
             </div>
-            <p className="min-h-10 whitespace-pre-wrap text-xs leading-5 text-muted-foreground">{annotation.ocr || "尚未识别文本"}</p>
+            <textarea
+              className="min-h-16 w-full resize-y rounded-md border bg-background px-2 py-1.5 text-xs leading-5 outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+              value={annotation.ocr ?? ""}
+              placeholder="尚未识别文本"
+              onClick={(event) => event.stopPropagation()}
+              onChange={(event) => onUpdate?.(index, { ocr: event.target.value })}
+            />
             <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
               {annotation.status === "finished" ? <Check className="size-3 text-emerald-500" /> : null}
-              {annotation.status === "processing" ? "处理中" : annotation.status === "finished" ? "已完成" : "未处理"}
+              {annotation.error ? "识别失败" : annotation.status === "processing" ? "处理中" : annotation.status === "finished" ? `已完成${annotation.confidence != null ? ` · ${(annotation.confidence * 100).toFixed(1)}%` : ""}` : "未处理"}
             </div>
-          </button>
+          </div>
         ))}
         {!annotations.length ? <div className="grid place-items-center py-16 text-center text-xs text-muted-foreground">在图片上拖动以创建文本区域</div> : null}
         </div>

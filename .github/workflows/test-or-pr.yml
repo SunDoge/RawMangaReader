@@ -41,6 +41,9 @@ jobs:
       - name: test frontend
         run: pnpm test
 
+      - name: test Rust workspace
+        run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

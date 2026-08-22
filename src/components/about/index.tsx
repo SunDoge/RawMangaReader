@@ -38,6 +38,7 @@ export function About({ open, onOpenChange }: AboutProps) {
           <a className="flex items-center gap-2 text-primary hover:underline" href="https://github.com/SunDoge/RawMangaReader/issues" target="_blank" rel="noreferrer">
             问题反馈 <ExternalLink className="size-3.5" />
           </a>
+          <p className="text-xs leading-5 text-muted-foreground">本地 OCR 由 OAR-OCR 与 PaddleOCR PP-OCRv6 提供，模型按 Apache-2.0 许可发布。</p>
           <p className="text-xs text-muted-foreground">Copyright © 2023–2026 SunDoge</p>
         </div>
       </DialogContent>
