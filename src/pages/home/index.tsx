@@ -14,6 +14,7 @@ import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
 import { getOcrModelStatus, recognizePage, recognizeRegion, type OcrModelStatus } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
+import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort } from "./utils";
 
@@ -24,6 +25,7 @@ export default function Home() {
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
+  const [translating, setTranslating] = useState(false);
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
 
@@ -105,6 +107,32 @@ export default function Home() {
     }
   }, [currentAnnotations.length, currentIndex, images, modelStatus?.installed, pageProcessing, updateAnnotations]);
 
+  const translateAll = useCallback(async () => {
+    if (translating) return;
+    const items = currentAnnotations
+      .map((annotation, index) => ({ index, text: annotation.ocr?.trim() }))
+      .filter((item): item is { index: number; text: string } => Boolean(item.text));
+    if (!items.length) return;
+
+    setTranslating(true);
+    try {
+      const translated = await translateWithMicrosoftEdge(
+        items.map((item) => item.text),
+        { from: "ja", to: "zh-Hans" },
+      );
+      const byIndex = new Map(items.map((item, resultIndex) => [item.index, translated[resultIndex]]));
+      updateAnnotations(currentAnnotations.map((annotation, index) => {
+        const translation = byIndex.get(index);
+        return translation == null ? annotation : { ...annotation, translation };
+      }));
+      toast.success(`翻译完成，共 ${translated.length} 条`);
+    } catch (error) {
+      toast.error("Microsoft Edge 翻译失败", { description: String(error) });
+    } finally {
+      setTranslating(false);
+    }
+  }, [currentAnnotations, translating, updateAnnotations]);
+
   const actions = (
     <>
       <Button size="sm" onClick={() => void openImages()}><ImagePlus data-icon="inline-start" />选择图片</Button>
@@ -135,7 +163,7 @@ export default function Home() {
       {images.length ? (
         <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
           <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images} currentIndex={currentIndex} onSelected={selectImage} /></aside>
-          <section className="min-h-0"><AnnotationBlock imageList={images} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} /></section>
+          <section className="min-h-0"><AnnotationBlock imageList={images} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} /></section>
         </div>
       ) : (
         <section className="relative grid min-h-0 flex-1 place-items-center overflow-hidden p-8">

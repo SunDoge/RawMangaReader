@@ -18,6 +18,9 @@
         },
         {
           "url": "https://api.cognitive.microsofttranslator.com/**"
+        },
+        {
+          "url": "https://edge.microsoft.com/**"
         }
       ]
     }
