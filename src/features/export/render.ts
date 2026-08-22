@@ -1,16 +1,22 @@
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import type { TranslationOverlayOptions } from "@/features/translation/overlay";
 import { resolveTranslationDirection } from "@/features/translation/overlay";
 import type { IAnnotationType } from "@/types/annotation";
 
 const FONT_FAMILY = '"Noto Sans CJK SC", "PingFang SC", "Microsoft YaHei", sans-serif';
 
-function loadImage(path: string): Promise<HTMLImageElement> {
+function imageMimeType(path: string): string {
+  const extension = path.split(".").pop()?.toLowerCase();
+  return ({ jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", gif: "image/gif", bmp: "image/bmp" } as Record<string, string>)[extension ?? ""] ?? "application/octet-stream";
+}
+
+function loadImage(bytes: ArrayBuffer, mimeType: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
+    const source = URL.createObjectURL(new Blob([bytes], { type: mimeType }));
     const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => reject(new Error("无法读取待导出的原图"));
-    image.src = convertFileSrc(path);
+    image.onload = () => { URL.revokeObjectURL(source); resolve(image); };
+    image.onerror = () => { URL.revokeObjectURL(source); reject(new Error("无法读取待导出的原图")); };
+    image.src = source;
   });
 }
 
@@ -88,8 +94,9 @@ function drawTranslation(context: CanvasRenderingContext2D, annotation: IAnnotat
   context.restore();
 }
 
-export async function renderTranslatedPng(imagePath: string, annotations: IAnnotationType[], options: TranslationOverlayOptions): Promise<Uint8Array> {
-  const image = await loadImage(imagePath);
+export async function renderTranslatedPng(imageId: string, imagePath: string, annotations: IAnnotationType[], options: TranslationOverlayOptions): Promise<Uint8Array> {
+  const source = await invoke<ArrayBuffer>("read_export_source", { imageId });
+  const image = await loadImage(source, imageMimeType(imagePath));
   const canvas = document.createElement("canvas");
   canvas.width = image.naturalWidth;
   canvas.height = image.naturalHeight;

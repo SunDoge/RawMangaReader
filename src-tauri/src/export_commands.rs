@@ -1,5 +1,18 @@
+use crate::image_store::ImageStore;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::Arc;
+
+#[tauri::command]
+pub fn read_export_source(
+    images: tauri::State<'_, Arc<ImageStore>>,
+    image_id: String,
+) -> Result<tauri::ipc::Response, String> {
+    images
+        .original_bytes(&image_id)
+        .map(tauri::ipc::Response::new)
+        .map_err(|error| error.to_string())
+}
 
 const PNG_SIGNATURE: &[u8] = b"\x89PNG\r\n\x1a\n";
 

@@ -35,6 +35,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            export_commands::read_export_source,
             export_commands::write_exported_image,
             ocr_commands::get_ocr_model_status,
             ocr_commands::download_ocr_model,
