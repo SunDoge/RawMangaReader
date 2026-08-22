@@ -67,6 +67,13 @@ pub struct OcrRegion {
     pub confidence: f32,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PageRecognition {
+    pub regions: Vec<OcrRegion>,
+    pub raw_regions: Vec<OcrRegion>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RegionRecognition {
@@ -119,17 +126,28 @@ impl OcrEngine {
         image: &RgbImage,
         merge_options: VerticalMergeOptions,
     ) -> Result<Vec<OcrRegion>> {
+        Ok(self
+            .recognize_page_image_with_debug(image, merge_options)?
+            .regions)
+    }
+
+    pub fn recognize_page_image_with_debug(
+        &self,
+        image: &RgbImage,
+        merge_options: VerticalMergeOptions,
+    ) -> Result<PageRecognition> {
         let (width, height) = image.dimensions();
         let results = self
             .pipeline
             .predict(vec![image.clone()])
             .context("PP-OCRv6 page inference failed")?;
 
-        let mut regions = results[0]
+        let raw_regions = results[0]
             .text_regions
             .iter()
             .filter_map(|region| normalized_region(region, width, height))
             .collect::<Vec<_>>();
+        let mut regions = raw_regions.clone();
         filter_small_regions(&mut regions, width, height, merge_options.min_text_size_px);
         if merge_options.enabled {
             regions = merge_vertical_regions(regions, width, height, merge_options);
@@ -138,7 +156,7 @@ impl OcrEngine {
             }
         }
         sort_manga_regions(&mut regions);
-        Ok(regions)
+        Ok(PageRecognition { regions, raw_regions })
     }
 
     pub fn recognize_region(

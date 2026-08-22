@@ -18,6 +18,20 @@ export class RawMangaReaderDatabase extends Dexie {
       recentSources: "&[kind+path], openedAt, kind",
       settings: "&key, updatedAt",
     });
+    this.version(2).stores({
+      recentSources: "&[kind+path], openedAt, kind",
+      settings: "&key, updatedAt",
+    }).upgrade(async (transaction) => {
+      await transaction.table<SettingsRecord>("settings").toCollection().modify((record) => {
+        record.value = {
+          ...DEFAULT_APP_PREFERENCES,
+          ...record.value,
+          mergeOptions: { ...DEFAULT_APP_PREFERENCES.mergeOptions, ...record.value.mergeOptions },
+          translationOverlayOptions: { ...DEFAULT_APP_PREFERENCES.translationOverlayOptions, ...record.value.translationOverlayOptions },
+          translationSettings: { ...DEFAULT_APP_PREFERENCES.translationSettings, ...record.value.translationSettings },
+        };
+      });
+    });
   }
 }
 

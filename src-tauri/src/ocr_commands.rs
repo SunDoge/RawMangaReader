@@ -1,6 +1,6 @@
 use crate::image_store::{ocr_cache_key, CacheKind, ImageCacheStats, ImageStore, RegisteredImage};
 use ocr::{
-    OcrEngine, OcrRegion, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY, DETECTION_MODEL,
+    OcrEngine, PageRecognition, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY, DETECTION_MODEL,
     MODEL_VERSION, RECOGNITION_MODEL,
 };
 use serde::Serialize;
@@ -263,7 +263,7 @@ pub async fn recognize_page(
     images: State<'_, Arc<ImageStore>>,
     image_id: String,
     merge_options: Option<ocr::VerticalMergeOptions>,
-) -> Result<Vec<OcrRegion>, String> {
+) -> Result<PageRecognition, String> {
     let state = Arc::clone(state.inner());
     let images = Arc::clone(images.inner());
     let directory = model_directory(&app)?;
@@ -283,7 +283,7 @@ pub(crate) async fn recognize_page_cached(
     directory: PathBuf,
     image_id: String,
     merge_options: ocr::VerticalMergeOptions,
-) -> Result<Vec<OcrRegion>, String> {
+) -> Result<PageRecognition, String> {
     let ocr_cache = images.ocr_cache().clone();
     let fingerprint = images
         .fingerprint(&image_id)
@@ -307,7 +307,7 @@ pub(crate) async fn recognize_page_cached(
             .decoded(&image_id)
             .map_err(|error| error.to_string())?;
         with_engine(&state, &directory, |engine| {
-            engine.recognize_page_image(&image, merge_options)
+            engine.recognize_page_image_with_debug(&image, merge_options)
         })
     })
     .await

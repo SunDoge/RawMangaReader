@@ -7,6 +7,10 @@ const createDatabase = () => { const database = new RawMangaReaderDatabase(`test
 afterEach(async () => { await Promise.all(databases.splice(0).map((database) => database.delete())); });
 
 describe("Dexie frontend storage", () => {
+  it("uses a versioned schema", () => {
+    expect(createDatabase().verno).toBe(2);
+  });
+
   it("persists settings and indexed history", async () => {
     const database = createDatabase();
     const initial = await initializeFrontendStorage(database);
