@@ -51,4 +51,22 @@ describe("OpenRouter translation provider", () => {
     await expect(listOpenRouterModels("key", transport)).resolves.toEqual([{ id: "a/model", name: "Alpha", contextLength: undefined }, { id: "z/model", name: "Zulu", contextLength: 1000 }]);
     expect(new Headers(transport.mock.calls[0][1]?.headers).get("authorization")).toBe("Bearer key");
   });
+
+  it("aborts a model-list request that never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      let requestSignal: AbortSignal | undefined;
+      const transport = vi.fn<OpenRouterHttpTransport>(async (_url, init) => {
+        requestSignal = init?.signal ?? undefined;
+        return await new Promise<Response>(() => undefined);
+      });
+      const request = listOpenRouterModels("key", transport);
+      const rejection = expect(request).rejects.toThrow("请求超时（15 秒）");
+      await vi.advanceTimersByTimeAsync(15_000);
+      await rejection;
+      expect(requestSignal?.aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

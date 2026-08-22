@@ -29,9 +29,46 @@ interface OpenRouterCompletion {
   error?: { message?: string };
 }
 
+const MODEL_LIST_TIMEOUT_MS = 15_000;
+const TRANSLATION_TIMEOUT_MS = 90_000;
+
+async function requestWithTimeout(
+  transport: OpenRouterHttpTransport,
+  input: string,
+  init: RequestInit,
+  timeoutMs: number,
+  parentSignal?: AbortSignal,
+): Promise<Response> {
+  const controller = new AbortController();
+  const forwardAbort = () => controller.abort(parentSignal?.reason);
+  if (parentSignal?.aborted) controller.abort(parentSignal.reason);
+  else parentSignal?.addEventListener("abort", forwardAbort, { once: true });
+  let timedOut = false;
+  let timer!: ReturnType<typeof setTimeout>;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+      reject(new Error(`OpenRouter 请求超时（${Math.round(timeoutMs / 1000)} 秒）`));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([
+      transport(input, { ...init, signal: controller.signal }),
+      timeout,
+    ]);
+  } catch (error) {
+    if (timedOut) throw new Error(`OpenRouter 请求超时（${Math.round(timeoutMs / 1000)} 秒）`);
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    parentSignal?.removeEventListener("abort", forwardAbort);
+  }
+}
+
 export async function listOpenRouterModels(apiKey: string, transport: OpenRouterHttpTransport = appHttpFetch, signal?: AbortSignal): Promise<OpenRouterModel[]> {
   if (!apiKey.trim()) return [];
-  const response = await transport("https://openrouter.ai/api/v1/models", { headers: { "Authorization": `Bearer ${apiKey.trim()}` }, signal });
+  const response = await requestWithTimeout(transport, "https://openrouter.ai/api/v1/models", { headers: { "Authorization": `Bearer ${apiKey.trim()}` } }, MODEL_LIST_TIMEOUT_MS, signal);
   const responseBody = await response.text();
   let payload: { data?: Array<{ id?: unknown; name?: unknown; context_length?: unknown }>; error?: { message?: string } };
   try { payload = JSON.parse(responseBody) as typeof payload; } catch { throw new Error(`OpenRouter 模型列表响应无法解析 (${response.status})`); }
@@ -74,12 +111,11 @@ export async function translateWithOpenRouter(
   if (!apiKey.trim()) throw new Error("请先填写 OpenRouter API Key");
   if (!model.trim()) throw new Error("请先填写 OpenRouter 模型名称");
 
-  const response = await transport("https://openrouter.ai/api/v1/chat/completions", {
+  const response = await requestWithTimeout(transport, "https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: { "Authorization": `Bearer ${apiKey.trim()}`, "Content-Type": "application/json" },
     body: JSON.stringify({ model: model.trim(), temperature: 0, messages: [{ role: "user", content: translationPrompt(texts, from, to) }] }),
-    signal,
-  });
+  }, TRANSLATION_TIMEOUT_MS, signal);
   const responseBody = await response.text();
   let completion: OpenRouterCompletion;
   try { completion = JSON.parse(responseBody) as OpenRouterCompletion; } catch {
