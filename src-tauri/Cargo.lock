@@ -2373,13 +2373,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "imgproc"
-version = "0.1.0"
-dependencies = [
- "image",
-]
-
-[[package]]
 name = "imgref"
 version = "1.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
