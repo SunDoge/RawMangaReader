@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, FolderOpen, HardDrive, Info, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles } from "lucide-react";
+import { ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
@@ -13,9 +13,11 @@ import { ThumbnailList } from "@/components/thumbnail-list";
 import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
 import { OcrDebugSettings } from "@/components/ocr-debug-settings";
+import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
 import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, type OcrModelStatus, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
+import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort } from "./utils";
 
@@ -25,11 +27,13 @@ export default function Home() {
   const [aboutOpen, setAboutOpen] = useState(false);
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
   const [ocrSettingsOpen, setOcrSettingsOpen] = useState(false);
+  const [translationOverlaySettingsOpen, setTranslationOverlaySettingsOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
+  const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
@@ -180,6 +184,7 @@ export default function Home() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setModelManagerOpen(true)}><HardDrive />OCR 模型</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setOcrSettingsOpen(true)}><SlidersHorizontal />OCR 合并调试</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTranslationOverlaySettingsOpen(true)}><Languages />译文回填</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -188,7 +193,7 @@ export default function Home() {
       {images.length ? (
         <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
           <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} /></aside>
-          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} /></section>
+          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} translationOverlayOptions={translationOverlayOptions} /></section>
         </div>
       ) : (
         <section className="relative grid min-h-0 flex-1 place-items-center overflow-hidden p-8">
@@ -215,6 +220,13 @@ export default function Home() {
           setMergeOptions({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
           setShowBoundingBoxes(true);
         }}
+      />
+      <TranslationOverlaySettings
+        open={translationOverlaySettingsOpen}
+        onOpenChange={setTranslationOverlaySettingsOpen}
+        options={translationOverlayOptions}
+        onOptionsChange={setTranslationOverlayOptions}
+        onReset={() => setTranslationOverlayOptions({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS })}
       />
     </main>
   );
