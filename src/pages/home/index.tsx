@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock3, Database, FileDown, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, Clock3, Database, FileDown, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
@@ -7,7 +7,6 @@ import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
 import { About } from "@/components/about";
 import { ThumbnailList } from "@/components/thumbnail-list";
 import { AnnotationBlock } from "@/components/annotation-block";
@@ -243,7 +242,7 @@ export default function Home() {
     const image = images[currentIndex];
     if (!image || pageProcessing) return;
     if (currentAnnotations.length) {
-      const confirmed = await ask("整页 OCR 会替换当前页面的识别区域和人工修改，是否继续？", {
+      const confirmed = await ask("重新识别会替换当前页面的识别区域和人工修改，是否继续？", {
         title: "重新识别当前页面",
         kind: "warning",
       });
@@ -258,7 +257,7 @@ export default function Home() {
       updateAnnotations(next);
       toast.success(`识别完成，共找到 ${next.length} 个文本区域`);
     } catch (error) {
-      toast.error("整页 OCR 失败", { description: formatAppError(error) });
+      toast.error("重新识别整页失败", { description: formatAppError(error) });
     } finally {
       setPageProcessing(false);
     }
@@ -313,26 +312,38 @@ export default function Home() {
     }
   }, [currentAnnotations, currentIndex, images, translationOverlayOptions]);
 
-  const actions = (
+  const importActions = (
     <>
       <Button size="sm" onClick={() => void openImages()}><ImagePlus data-icon="inline-start" />选择图片</Button>
       <Button size="sm" variant="outline" onClick={() => void openFolder()}><FolderOpen data-icon="inline-start" />打开文件夹</Button>
-      <Button size="sm" variant="ghost" onClick={() => void runPageOCR()} disabled={!images.length || pageProcessing}>
-        {pageProcessing ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <ScanText data-icon="inline-start" />}
-        {pageProcessing ? "识别中" : "整页 OCR"}
-      </Button>
-      <Button size="sm" variant="ghost" onClick={() => void exportCurrentPage()} disabled={!currentAnnotations.some((item) => item.translation?.trim())}><FileDown data-icon="inline-start" />导出嵌字</Button>
     </>
   );
 
   return (
     <main className="flex h-screen min-h-0 flex-col bg-background">
-      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
-        <div className="flex items-center gap-2 font-semibold tracking-tight"><div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-4" /></div><span>Raw Manga Reader</span></div>
-        <Separator orientation="vertical" className="mx-1 h-5" />
-        <div className="flex flex-1 items-center gap-2">{actions}</div>
-        {images.length ? <Badge variant="secondary">{images.length} 页</Badge> : null}
-        <DropdownMenu>
+      <header className="grid h-14 shrink-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-4 border-b px-4">
+        <div className="flex items-center gap-2 font-semibold tracking-tight"><div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-4" /></div><span className="hidden whitespace-nowrap sm:inline">Raw Manga Reader</span></div>
+        <div className="flex min-w-0 items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button size="sm" variant="outline"><FolderOpen data-icon="inline-start" />打开<ChevronDown data-icon="inline-end" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => void openImages()}><ImagePlus />选择图片</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void openFolder()}><FolderOpen />打开文件夹</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {images.length ? <div className="flex min-w-0 items-center rounded-lg border bg-muted/30 p-0.5">
+            <Button size="sm" variant="ghost" onClick={() => void runPageOCR()} disabled={pageProcessing} title="重新检测当前页的文字区域并执行 OCR">
+              {pageProcessing ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <ScanText data-icon="inline-start" />}
+              {pageProcessing ? "识别中" : "重新识别整页"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void translateAll()} disabled={translating || !currentAnnotations.some((item) => item.ocr?.trim())}>
+              {translating ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Languages data-icon="inline-start" />}
+              {translating ? "翻译中" : "翻译当前页"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => void exportCurrentPage()} disabled={!currentAnnotations.some((item) => item.translation?.trim())}><FileDown data-icon="inline-start" />导出嵌字</Button>
+          </div> : null}
+        </div>
+        <div className="flex items-center gap-1">{images.length ? <Badge variant="secondary">{images.length} 页</Badge> : null}<DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="打开菜单"><Menu /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => openPanel("ocr-model")}><HardDrive />OCR 模型</DropdownMenuItem>
@@ -342,7 +353,7 @@ export default function Home() {
             <DropdownMenuItem onClick={() => openPanel("cache")}><Database />缓存</DropdownMenuItem>
             <DropdownMenuItem onClick={() => openPanel("about")}><Info />关于</DropdownMenuItem>
           </DropdownMenuContent>
-        </DropdownMenu>
+        </DropdownMenu></div>
       </header>
 
       {images.length ? (
@@ -357,8 +368,8 @@ export default function Home() {
             <div className="mb-6 grid size-20 place-items-center rounded-3xl border bg-card shadow-sm"><ImagePlus className="size-9 text-muted-foreground" /></div>
             <Badge variant="outline" className="mb-3">Tauri 2 · React 19</Badge>
             <h1 className="text-3xl font-semibold tracking-tight">开始阅读与标注</h1>
-            <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">选择漫画图片或整个文件夹，下载 PP-OCRv6 模型后即可整页识别；也可以在画面上拖动并单独识别文本区域。</p>
-            <div className="mt-7 flex flex-wrap justify-center gap-2">{actions}</div>
+            <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">选择漫画图片或整个文件夹；安装 PP-OCRv6 模型后，页面会自动查找文字区域并识别。</p>
+            <div className="mt-7 flex flex-wrap justify-center gap-2">{importActions}</div>
             {recentSources.length ? <div className="mt-10 w-full text-left">
               <div className="mb-3 flex items-center justify-between"><h2 className="flex items-center gap-2 text-sm font-medium"><Clock3 className="size-4 text-muted-foreground" />最近打开</h2><Button variant="ghost" size="xs" onClick={() => updateRecentSources(() => [])}><Trash2 />清空历史</Button></div>
               <div className="grid gap-2 sm:grid-cols-2">
