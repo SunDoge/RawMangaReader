@@ -1,6 +1,6 @@
-import { useCallback, useRef, useState } from "react";
-import { ImagePlus, FolderOpen, Info, Menu, ScanText, Sparkles } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ImagePlus, FolderOpen, HardDrive, Info, LoaderCircle, Menu, ScanText, Sparkles } from "lucide-react";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
 import { toast } from "sonner";
@@ -11,6 +11,9 @@ import { Separator } from "@/components/ui/separator";
 import { About } from "@/components/about";
 import { ThumbnailList } from "@/components/thumbnail-list";
 import { AnnotationBlock } from "@/components/annotation-block";
+import { OcrModelManager } from "@/components/ocr-model-manager";
+import { getOcrModelStatus, recognizePage, recognizeRegion, type OcrModelStatus } from "@/features/ocr/api";
+import { regionsToAnnotations } from "@/features/ocr/utils";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort } from "./utils";
 
@@ -18,8 +21,17 @@ export default function Home() {
   const [images, setImages] = useState<string[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [modelManagerOpen, setModelManagerOpen] = useState(false);
+  const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
+  const [pageProcessing, setPageProcessing] = useState(false);
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
+
+  useEffect(() => {
+    void getOcrModelStatus()
+      .then(setModelStatus)
+      .catch((error) => toast.error("无法读取 OCR 模型状态", { description: String(error) }));
+  }, []);
 
   const loadImages = useCallback((paths: string[]) => {
     const sorted = [...paths].sort(naturalSort);
@@ -57,16 +69,50 @@ export default function Home() {
     annotations.current.set(images[currentIndex], next);
   }, [currentIndex, images]);
 
-  const runOCR = useCallback(async (_annotation: IAnnotationType) => {
-    toast.info("OCR 引擎将在下一阶段接入");
-    return { ocr: "", translate: "" };
-  }, []);
+  const runOCR = useCallback(async (annotation: IAnnotationType) => {
+    if (!modelStatus?.installed) {
+      setModelManagerOpen(true);
+      throw new Error("OCR 模型尚未安装");
+    }
+    const result = await recognizeRegion(images[currentIndex], annotation);
+    return { ocr: result.text, confidence: result.confidence, error: false };
+  }, [currentIndex, images, modelStatus?.installed]);
+
+  const runPageOCR = useCallback(async () => {
+    if (!modelStatus?.installed) {
+      setModelManagerOpen(true);
+      return;
+    }
+    const imagePath = images[currentIndex];
+    if (!imagePath || pageProcessing) return;
+    if (currentAnnotations.length) {
+      const confirmed = await ask("整页 OCR 会替换当前页面的识别区域和人工修改，是否继续？", {
+        title: "重新识别当前页面",
+        kind: "warning",
+      });
+      if (!confirmed) return;
+    }
+    setPageProcessing(true);
+    try {
+      const regions = await recognizePage(imagePath);
+      const next = regionsToAnnotations(regions);
+      updateAnnotations(next);
+      toast.success(`识别完成，共找到 ${next.length} 个文本区域`);
+    } catch (error) {
+      toast.error("整页 OCR 失败", { description: String(error) });
+    } finally {
+      setPageProcessing(false);
+    }
+  }, [currentAnnotations.length, currentIndex, images, modelStatus?.installed, pageProcessing, updateAnnotations]);
 
   const actions = (
     <>
       <Button size="sm" onClick={() => void openImages()}><ImagePlus data-icon="inline-start" />选择图片</Button>
       <Button size="sm" variant="outline" onClick={() => void openFolder()}><FolderOpen data-icon="inline-start" />打开文件夹</Button>
-      <Button size="sm" variant="ghost" disabled><ScanText data-icon="inline-start" />OCR 重构中</Button>
+      <Button size="sm" variant="ghost" onClick={() => void runPageOCR()} disabled={!images.length || pageProcessing}>
+        {pageProcessing ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <ScanText data-icon="inline-start" />}
+        {pageProcessing ? "识别中" : "整页 OCR"}
+      </Button>
     </>
   );
 
@@ -79,7 +125,10 @@ export default function Home() {
         {images.length ? <Badge variant="secondary">{images.length} 页</Badge> : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="打开菜单"><Menu /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem></DropdownMenuContent>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={() => setModelManagerOpen(true)}><HardDrive />OCR 模型</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem>
+          </DropdownMenuContent>
         </DropdownMenu>
       </header>
 
@@ -95,12 +144,13 @@ export default function Home() {
             <div className="mb-6 grid size-20 place-items-center rounded-3xl border bg-card shadow-sm"><ImagePlus className="size-9 text-muted-foreground" /></div>
             <Badge variant="outline" className="mb-3">Tauri 2 · React 19</Badge>
             <h1 className="text-3xl font-semibold tracking-tight">开始阅读与标注</h1>
-            <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">选择漫画图片或整个文件夹。在画面上拖动即可建立文本区域，OCR 能力将在后续重构阶段接入。</p>
+            <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">选择漫画图片或整个文件夹，下载 PP-OCRv6 模型后即可整页识别；也可以在画面上拖动并单独识别文本区域。</p>
             <div className="mt-7 flex flex-wrap justify-center gap-2">{actions}</div>
           </div>
         </section>
       )}
       <About open={aboutOpen} onOpenChange={setAboutOpen} />
+      <OcrModelManager open={modelManagerOpen} onOpenChange={setModelManagerOpen} status={modelStatus} onStatusChange={setModelStatus} />
     </main>
   );
 }

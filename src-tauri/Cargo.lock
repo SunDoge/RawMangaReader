@@ -1539,6 +1539,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10"
 dependencies = [
  "futures-core",
+ "futures-sink",
 ]
 
 [[package]]
@@ -3466,7 +3467,10 @@ dependencies = [
 name = "ocr"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "image",
  "oar-ocr",
+ "serde",
 ]
 
 [[package]]
@@ -4388,8 +4392,12 @@ dependencies = [
 name = "raw-manga-reader"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "ocr",
+ "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
@@ -4536,6 +4544,7 @@ dependencies = [
  "cookie",
  "cookie_store",
  "encoding_rs",
+ "futures-channel",
  "futures-core",
  "futures-util",
  "h2",

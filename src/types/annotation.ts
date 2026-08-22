@@ -7,6 +7,7 @@ export type IAnnotationType = {
   unit: "%";
   status?: "unprocessed" | "processing" | "finished";
   ocr?: string;
-  translate?: string;
+  confidence?: number;
+  polygon?: Array<{ x: number; y: number }>;
   error?: boolean;
 };

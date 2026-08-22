@@ -24,6 +24,7 @@ export function AnnotationBlock({
   onOCR,
 }: AnnotationBlockProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
+  const annotationListRef = useRef(annotationList);
   const [selected, setSelected] = useState(-1);
   const [start, setStart] = useState<RelativePoint | null>(null);
   const [draft, setDraft] = useState<IAnnotationType | null>(null);
@@ -32,6 +33,15 @@ export function AnnotationBlock({
     setSelected(-1);
     setDraft(null);
   }, [currentIndex]);
+
+  useEffect(() => {
+    annotationListRef.current = annotationList;
+  }, [annotationList]);
+
+  const commitAnnotations = useCallback((next: IAnnotationType[]) => {
+    annotationListRef.current = next;
+    onAnnotationListChange(next);
+  }, [onAnnotationListChange]);
 
   const pointFromEvent = (event: React.PointerEvent): RelativePoint => {
     const rect = overlayRef.current!.getBoundingClientRect();
@@ -58,7 +68,7 @@ export function AnnotationBlock({
   const handlePointerUp = () => {
     if (draft && isUsableAnnotation(draft)) {
       const next = [...annotationList, draft];
-      onAnnotationListChange(next);
+      commitAnnotations(next);
       setSelected(next.length - 1);
     }
     setStart(null);
@@ -66,21 +76,25 @@ export function AnnotationBlock({
   };
 
   const removeAnnotation = useCallback((index: number, length = 1) => {
-    const next = annotationList.filter((_, itemIndex) => itemIndex < index || itemIndex >= index + length);
-    onAnnotationListChange(next);
+    const next = annotationListRef.current.filter((_, itemIndex) => itemIndex < index || itemIndex >= index + length);
+    commitAnnotations(next);
     setSelected(-1);
-  }, [annotationList, onAnnotationListChange]);
+  }, [commitAnnotations]);
+
+  const updateAnnotation = useCallback((index: number, patch: Partial<IAnnotationType>) => {
+    commitAnnotations(annotationListRef.current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
+  }, [commitAnnotations]);
 
   const processAnnotation = useCallback(async (annotation: IAnnotationType, index: number) => {
-    const processing = annotationList.map((item, itemIndex) => itemIndex === index ? { ...item, status: "processing" as const } : item);
-    onAnnotationListChange(processing);
+    const processing = annotationListRef.current.map((item, itemIndex) => itemIndex === index ? { ...item, status: "processing" as const, error: false } : item);
+    commitAnnotations(processing);
     try {
       const result = await onOCR(annotation);
-      onAnnotationListChange(processing.map((item, itemIndex) => itemIndex === index ? { ...item, ...result, status: "finished" } : item));
+      updateAnnotation(index, { ...result, status: "finished", error: false });
     } catch {
-      onAnnotationListChange(processing.map((item, itemIndex) => itemIndex === index ? { ...item, status: "unprocessed", error: true } : item));
+      updateAnnotation(index, { status: "unprocessed", error: true });
     }
-  }, [annotationList, onAnnotationListChange, onOCR]);
+  }, [commitAnnotations, onOCR, updateAnnotation]);
 
   const visibleAnnotations = draft ? [...annotationList, draft] : annotationList;
 
@@ -125,7 +139,7 @@ export function AnnotationBlock({
         </div>
       </div>
       <aside className="min-h-0 border-l">
-        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} />
+        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onUpdate={updateAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} />
       </aside>
     </div>
   );
