@@ -49,9 +49,14 @@ export function TranslationProviderSettings({ open, onOpenChange, settings, onSe
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>翻译服务</DialogTitle>
-          <DialogDescription>基础翻译可使用 Microsoft Edge；OpenRouter 密钥目前只保存在本次应用会话中。</DialogDescription>
+          <DialogDescription>代理应用于翻译、模型列表和 OCR 模型下载；OpenRouter 密钥只保存在本次应用会话中。</DialogDescription>
         </DialogHeader>
         <div className="grid gap-4">
+          <div className="grid gap-3 rounded-lg border p-3">
+            <label className="flex items-center justify-between text-xs"><span>为 HTTP 请求启用代理</span><input className="size-4 accent-primary" type="checkbox" checked={settings.proxyEnabled} onChange={(event) => update({ proxyEnabled: event.target.checked })} /></label>
+            <label className="grid gap-1.5 text-xs"><span>代理地址</span><input className={fieldClass} spellCheck={false} placeholder="http://127.0.0.1:7890" value={settings.proxyUrl} onChange={(event) => update({ proxyUrl: event.target.value })} /></label>
+            <label className="grid gap-1.5 text-xs"><span>不使用代理（逗号分隔）</span><input className={fieldClass} spellCheck={false} placeholder="localhost,127.0.0.1" value={settings.proxyNoProxy} onChange={(event) => update({ proxyNoProxy: event.target.value })} /></label>
+          </div>
           <label className="grid gap-1.5 text-xs"><span>当前服务</span><select className={fieldClass} value={settings.provider} onChange={(event) => update({ provider: event.target.value as TranslationProvider })}><option value="microsoft-edge">Microsoft Edge（无需密钥）</option><option value="openrouter">OpenRouter</option></select></label>
           <label className="grid gap-1.5 text-xs"><span>OpenRouter API Key</span><input className={fieldClass} type="password" autoComplete="off" placeholder="sk-or-v1-…" value={settings.openRouterApiKey} onChange={(event) => update({ openRouterApiKey: event.target.value })} /></label>
           <label className="grid gap-1.5 text-xs"><span className="flex items-center justify-between"><span>翻译模型</span><span className="text-muted-foreground">{modelsLoading ? "正在加载…" : models.length ? `${models.length} 个可用模型` : "可手动填写 ID"}</span></span><input className={fieldClass} list="openrouter-models" spellCheck={false} value={settings.openRouterModel} onChange={(event) => update({ openRouterModel: event.target.value })} /><datalist id="openrouter-models">{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</datalist>{modelsError ? <span className="text-destructive">{modelsError}</span> : null}</label>

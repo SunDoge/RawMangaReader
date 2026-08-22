@@ -1,4 +1,4 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { appHttpFetch } from "@/features/http/proxy";
 
 export type TranslationHttpTransport = typeof globalThis.fetch;
 
@@ -42,7 +42,7 @@ export async function translateWithMicrosoftEdge(
     from = "auto",
     to,
     signal,
-    transport = tauriFetch,
+    transport = appHttpFetch,
   }: MicrosoftEdgeTranslateOptions,
 ): Promise<string[]> {
   if (!texts.length) return [];

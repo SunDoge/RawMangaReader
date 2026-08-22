@@ -19,6 +19,9 @@ export const DEFAULT_APP_PREFERENCES: AppPreferences = {
     provider: DEFAULT_TRANSLATION_SETTINGS.provider,
     openRouterModel: DEFAULT_TRANSLATION_SETTINGS.openRouterModel,
     comparisonModels: DEFAULT_TRANSLATION_SETTINGS.comparisonModels,
+    proxyEnabled: DEFAULT_TRANSLATION_SETTINGS.proxyEnabled,
+    proxyUrl: DEFAULT_TRANSLATION_SETTINGS.proxyUrl,
+    proxyNoProxy: DEFAULT_TRANSLATION_SETTINGS.proxyNoProxy,
   },
 };
 

@@ -8,7 +8,7 @@ afterEach(async () => { await Promise.all(databases.splice(0).map((database) => 
 
 describe("Dexie frontend storage", () => {
   it("uses a versioned schema", () => {
-    expect(createDatabase().verno).toBe(2);
+    expect(createDatabase().verno).toBe(3);
   });
 
   it("persists settings and indexed history", async () => {

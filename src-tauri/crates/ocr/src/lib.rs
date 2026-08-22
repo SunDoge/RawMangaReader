@@ -156,7 +156,10 @@ impl OcrEngine {
             }
         }
         sort_manga_regions(&mut regions);
-        Ok(PageRecognition { regions, raw_regions })
+        Ok(PageRecognition {
+            regions,
+            raw_regions,
+        })
     }
 
     pub fn recognize_region(

@@ -32,6 +32,14 @@ export class RawMangaReaderDatabase extends Dexie {
         };
       });
     });
+    this.version(3).stores({
+      recentSources: "&[kind+path], openedAt, kind",
+      settings: "&key, updatedAt",
+    }).upgrade(async (transaction) => {
+      await transaction.table<SettingsRecord>("settings").toCollection().modify((record) => {
+        record.value.translationSettings = { ...DEFAULT_APP_PREFERENCES.translationSettings, ...record.value.translationSettings };
+      });
+    });
   }
 }
 
