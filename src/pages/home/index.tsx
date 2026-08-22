@@ -23,15 +23,16 @@ import { translateWithMicrosoftEdge } from "@/features/translation/providers/mic
 import { compareOpenRouterModels, translateWithOpenRouter } from "@/features/translation/providers/openrouter";
 import { parseComparisonModels, type TranslationSettings } from "@/features/translation/settings";
 import type { TranslationOverlayOptions } from "@/features/translation/overlay";
-import { DEFAULT_APP_PREFERENCES, formatAppError, loadPreferences, savePreferences } from "@/features/preferences";
-import { addRecentSources, loadRecentSources, saveRecentSources, sourceName, type RecentSource } from "@/features/recent-sources";
+import { DEFAULT_APP_PREFERENCES, formatAppError } from "@/features/preferences";
+import { addRecentSources, sourceName, type RecentSource } from "@/features/recent-sources";
+import { initializeFrontendStorage, persistPreferences, persistRecentSources } from "@/features/storage/database";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort, prioritizeImageIds } from "./utils";
 
 export default function Home() {
-  const [initialPreferences] = useState(() => loadPreferences(localStorage));
   const [images, setImages] = useState<RegisteredImage[]>([]);
-  const [recentSources, setRecentSources] = useState<RecentSource[]>(() => loadRecentSources(localStorage));
+  const [recentSources, setRecentSources] = useState<RecentSource[]>([]);
+  const [storageReady, setStorageReady] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
@@ -42,10 +43,10 @@ export default function Home() {
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
-  const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>(initialPreferences.mergeOptions);
-  const [showBoundingBoxes, setShowBoundingBoxes] = useState(initialPreferences.showBoundingBoxes);
-  const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>(initialPreferences.translationOverlayOptions);
-  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...initialPreferences.translationSettings, openRouterApiKey: import.meta.env.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY ?? "") : "" });
+  const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(DEFAULT_APP_PREFERENCES.showBoundingBoxes);
+  const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>({ ...DEFAULT_APP_PREFERENCES.translationOverlayOptions });
+  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...DEFAULT_APP_PREFERENCES.translationSettings, openRouterApiKey: import.meta.env.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY ?? "") : "" });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
   const currentIndexRef = useRef(0);
@@ -59,8 +60,26 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    savePreferences(localStorage, { mergeOptions, showBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels } });
-  }, [mergeOptions, showBoundingBoxes, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider]);
+    void initializeFrontendStorage()
+      .then(({ preferences, recentSources: storedSources }) => {
+        setMergeOptions(preferences.mergeOptions);
+        setShowBoundingBoxes(preferences.showBoundingBoxes);
+        setTranslationOverlayOptions(preferences.translationOverlayOptions);
+        setTranslationSettings((current) => ({ ...preferences.translationSettings, openRouterApiKey: current.openRouterApiKey }));
+        setRecentSources(storedSources);
+      })
+      .catch((error) => toast.error("无法读取前端数据库", { description: formatAppError(error) }))
+      .finally(() => setStorageReady(true));
+  }, []);
+
+  useEffect(() => {
+    if (!storageReady) return;
+    const timer = window.setTimeout(() => {
+      void persistPreferences({ mergeOptions, showBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels } })
+        .catch((error) => toast.error("无法保存前端设置", { description: formatAppError(error) }));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [mergeOptions, showBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider]);
 
   useEffect(() => () => {
     void releaseImages(imagesRef.current.map((image) => image.id));
@@ -119,7 +138,7 @@ export default function Home() {
   const updateRecentSources = useCallback((update: (current: RecentSource[]) => RecentSource[]) => {
     setRecentSources((current) => {
       const next = update(current);
-      saveRecentSources(localStorage, next);
+      void persistRecentSources(next).catch((error) => toast.error("无法保存历史记录", { description: formatAppError(error) }));
       return next;
     });
   }, []);
