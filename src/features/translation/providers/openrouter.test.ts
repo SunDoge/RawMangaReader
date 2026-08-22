@@ -1,0 +1,40 @@
+import { describe, expect, it, vi } from "vitest";
+import { compareOpenRouterModels, parseTranslationArray, translateWithOpenRouter, type OpenRouterHttpTransport } from "./openrouter";
+
+function completion(content: string, model = "test/model") {
+  return { id: "id", object: "chat.completion", created: 1, model, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } };
+}
+
+describe("OpenRouter translation provider", () => {
+  it("uses the OpenRouter endpoint and preserves batch order", async () => {
+    const transport = vi.fn<OpenRouterHttpTransport>(async () => Response.json(completion('["你好","世界"]')));
+    await expect(translateWithOpenRouter(["こんにちは", "世界"], { apiKey: "test-key", model: "test/model", transport })).resolves.toEqual(["你好", "世界"]);
+    const [url, init] = transport.mock.calls[0];
+    expect(String(url)).toBe("https://openrouter.ai/api/v1/chat/completions");
+    expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-key");
+    expect(JSON.parse(String(init?.body))).toMatchObject({ model: "test/model", temperature: 0 });
+  });
+
+  it("accepts fenced JSON and rejects incomplete batches", () => {
+    expect(parseTranslationArray('```json\n["译文"]\n```', 1)).toEqual(["译文"]);
+    expect(() => parseTranslationArray('["一条"]', 2)).toThrow("预期 2 条");
+    expect(() => parseTranslationArray("not json", 1)).toThrow("有效的 JSON");
+  });
+
+  it("compares the same batch while isolating model failures", async () => {
+    const transport = vi.fn<OpenRouterHttpTransport>(async (_url, init) => {
+      const model = JSON.parse(String(init?.body)).model as string;
+      return Response.json(completion(model === "bad/model" ? "invalid" : '["译文"]', model));
+    });
+    const results = await compareOpenRouterModels(["原文"], ["good/model", "bad/model", "good/model"], { apiKey: "key", transport });
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({ model: "good/model", translations: ["译文"] });
+    expect(results[1]).toMatchObject({ model: "bad/model", error: expect.any(String) });
+  });
+
+  it("does not issue a request for an empty batch", async () => {
+    const transport = vi.fn<OpenRouterHttpTransport>();
+    await expect(translateWithOpenRouter([], { apiKey: "", model: "", transport })).resolves.toEqual([]);
+    expect(transport).not.toHaveBeenCalled();
+  });
+});

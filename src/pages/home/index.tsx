@@ -15,10 +15,13 @@ import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
 import { OcrDebugSettings } from "@/components/ocr-debug-settings";
 import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
+import { TranslationProviderSettings } from "@/components/translation-provider-settings";
 import { CacheManager } from "@/components/cache-manager";
 import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
+import { compareOpenRouterModels, translateWithOpenRouter } from "@/features/translation/providers/openrouter";
+import { DEFAULT_TRANSLATION_SETTINGS, parseComparisonModels, type TranslationSettings } from "@/features/translation/settings";
 import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort, prioritizeImageIds } from "./utils";
@@ -30,6 +33,7 @@ export default function Home() {
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
   const [ocrSettingsOpen, setOcrSettingsOpen] = useState(false);
   const [translationOverlaySettingsOpen, setTranslationOverlaySettingsOpen] = useState(false);
+  const [translationProviderSettingsOpen, setTranslationProviderSettingsOpen] = useState(false);
   const [cacheManagerOpen, setCacheManagerOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
@@ -37,6 +41,7 @@ export default function Home() {
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS });
+  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...DEFAULT_TRANSLATION_SETTINGS });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
   const currentIndexRef = useRef(0);
@@ -185,10 +190,10 @@ export default function Home() {
 
     setTranslating(true);
     try {
-      const translated = await translateWithMicrosoftEdge(
-        items.map((item) => item.text),
-        { from: "ja", to: "zh-Hans" },
-      );
+      const texts = items.map((item) => item.text);
+      const translated = translationSettings.provider === "openrouter"
+        ? await translateWithOpenRouter(texts, { apiKey: translationSettings.openRouterApiKey, model: translationSettings.openRouterModel })
+        : await translateWithMicrosoftEdge(texts, { from: "ja", to: "zh-Hans" });
       const byIndex = new Map(items.map((item, resultIndex) => [item.index, translated[resultIndex]]));
       updateAnnotations(currentAnnotations.map((annotation, index) => {
         const translation = byIndex.get(index);
@@ -196,11 +201,19 @@ export default function Home() {
       }));
       toast.success(`翻译完成，共 ${translated.length} 条`);
     } catch (error) {
-      toast.error("Microsoft Edge 翻译失败", { description: String(error) });
+      toast.error("翻译失败", { description: String(error) });
     } finally {
       setTranslating(false);
     }
-  }, [currentAnnotations, translating, updateAnnotations]);
+  }, [currentAnnotations, translating, translationSettings, updateAnnotations]);
+
+  const compareTranslationModels = useCallback(async () => {
+    const texts = currentAnnotations.map((annotation) => annotation.ocr?.trim()).filter((text): text is string => Boolean(text));
+    const results = await compareOpenRouterModels(texts, parseComparisonModels(translationSettings.comparisonModels), { apiKey: translationSettings.openRouterApiKey });
+    const successes = results.filter((result) => result.translations).length;
+    toast.success(`模型对比完成，${successes}/${results.length} 个成功`);
+    return results;
+  }, [currentAnnotations, translationSettings]);
 
   const actions = (
     <>
@@ -226,6 +239,7 @@ export default function Home() {
             <DropdownMenuItem onClick={() => setModelManagerOpen(true)}><HardDrive />OCR 模型</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setOcrSettingsOpen(true)}><SlidersHorizontal />OCR 合并调试</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTranslationOverlaySettingsOpen(true)}><Languages />译文回填</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setTranslationProviderSettingsOpen(true)}><Sparkles />翻译服务</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setCacheManagerOpen(true)}><Database />缓存</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem>
           </DropdownMenuContent>
@@ -270,6 +284,7 @@ export default function Home() {
         onOptionsChange={setTranslationOverlayOptions}
         onReset={() => setTranslationOverlayOptions({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS })}
       />
+      <TranslationProviderSettings open={translationProviderSettingsOpen} onOpenChange={setTranslationProviderSettingsOpen} settings={translationSettings} onSettingsChange={setTranslationSettings} onCompare={compareTranslationModels} canCompare={currentAnnotations.some((annotation) => Boolean(annotation.ocr?.trim()))} />
       <CacheManager open={cacheManagerOpen} onOpenChange={setCacheManagerOpen} />
     </main>
   );
