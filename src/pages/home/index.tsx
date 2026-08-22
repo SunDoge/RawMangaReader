@@ -16,7 +16,7 @@ import { OcrDebugSettings } from "@/components/ocr-debug-settings";
 import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
 import { TranslationProviderSettings } from "@/components/translation-provider-settings";
 import { CacheManager } from "@/components/cache-manager";
-import { getOcrModelStatus, listImageFiles, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type OcrRegion, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
+import { getOcrModelStatus, listImageFiles, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelKind, type OcrModelStatus, type OcrRegion, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import { compareOpenRouterModels, translateWithOpenRouter } from "@/features/translation/providers/openrouter";
@@ -41,6 +41,7 @@ export default function Home() {
   const [storageReady, setStorageReady] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
+  const [ocrModelKind, setOcrModelKind] = useState<OcrModelKind>(DEFAULT_APP_PREFERENCES.ocrModelKind);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
@@ -55,12 +56,14 @@ export default function Home() {
   const preloadRequestRef = useRef("");
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
   const [currentRawRegions, setCurrentRawRegions] = useState<OcrRegion[]>([]);
+  const modelInstalled = modelStatus?.kind === ocrModelKind && modelStatus.installed;
 
   useEffect(() => {
-    void getOcrModelStatus()
+    setModelStatus(null);
+    void getOcrModelStatus(ocrModelKind)
       .then(setModelStatus)
       .catch((error) => toast.error("无法读取 OCR 模型状态", { description: formatAppError(error) }));
-  }, []);
+  }, [ocrModelKind]);
 
   useEffect(() => {
     const settings = { proxyEnabled: translationSettings.proxyEnabled, proxyUrl: translationSettings.proxyUrl, proxyNoProxy: translationSettings.proxyNoProxy };
@@ -73,6 +76,7 @@ export default function Home() {
     void initializeFrontendStorage()
       .then(({ preferences, recentSources: storedSources }) => {
         setMergeOptions(preferences.mergeOptions);
+        setOcrModelKind(preferences.ocrModelKind);
         setShowBoundingBoxes(preferences.showBoundingBoxes);
         setShowRawBoundingBoxes(preferences.showRawBoundingBoxes);
         setTranslationOverlayOptions(preferences.translationOverlayOptions);
@@ -86,11 +90,11 @@ export default function Home() {
   useEffect(() => {
     if (!storageReady) return;
     const timer = window.setTimeout(() => {
-      void persistPreferences({ mergeOptions, showBoundingBoxes, showRawBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels, proxyEnabled: translationSettings.proxyEnabled, proxyUrl: translationSettings.proxyUrl, proxyNoProxy: translationSettings.proxyNoProxy } })
+      void persistPreferences({ ocrModelKind, mergeOptions, showBoundingBoxes, showRawBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels, proxyEnabled: translationSettings.proxyEnabled, proxyUrl: translationSettings.proxyUrl, proxyNoProxy: translationSettings.proxyNoProxy } })
         .catch((error) => toast.error("无法保存前端设置", { description: formatAppError(error) }));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [mergeOptions, showBoundingBoxes, showRawBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider, translationSettings.proxyEnabled, translationSettings.proxyNoProxy, translationSettings.proxyUrl]);
+  }, [mergeOptions, ocrModelKind, showBoundingBoxes, showRawBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider, translationSettings.proxyEnabled, translationSettings.proxyNoProxy, translationSettings.proxyUrl]);
 
   useEffect(() => () => {
     void releaseImages(imagesRef.current.map((image) => image.id));
@@ -130,9 +134,10 @@ export default function Home() {
       requestId,
       imageIds: prioritizeImageIds(images.map((image) => image.id), currentIndex),
       mergeOptions,
-      recognize: Boolean(modelStatus?.installed),
+      recognize: Boolean(modelInstalled),
+      modelKind: ocrModelKind,
     }).catch((error) => toast.error("无法调度图片预识别", { description: formatAppError(error) }));
-  }, [currentIndex, images, mergeOptions, modelStatus?.installed]);
+  }, [currentIndex, images, mergeOptions, modelInstalled, ocrModelKind]);
 
   const loadImages = useCallback(async (paths: string[]) => {
     const sorted = [...paths].sort(naturalSort);
@@ -222,16 +227,16 @@ export default function Home() {
   }, [currentIndex, images]);
 
   const runOCR = useCallback(async (annotation: IAnnotationType) => {
-    if (!modelStatus?.installed) {
+    if (!modelInstalled) {
       openPanel("ocr-model");
       throw new Error("OCR 模型尚未安装");
     }
-    const result = await recognizeRegion(images[currentIndex].id, annotation);
+    const result = await recognizeRegion(images[currentIndex].id, annotation, ocrModelKind);
     return { ocr: result.text, confidence: result.confidence, error: false };
-  }, [currentIndex, images, modelStatus?.installed]);
+  }, [currentIndex, images, modelInstalled, ocrModelKind]);
 
   const runPageOCR = useCallback(async () => {
-    if (!modelStatus?.installed) {
+    if (!modelInstalled) {
       openPanel("ocr-model");
       return;
     }
@@ -246,7 +251,7 @@ export default function Home() {
     }
     setPageProcessing(true);
     try {
-      const result = await recognizePage(image.id, mergeOptions);
+      const result = await recognizePage(image.id, mergeOptions, ocrModelKind);
       const next = regionsToAnnotations(result.regions);
       rawRegions.current.set(image.id, result.rawRegions);
       setCurrentRawRegions(result.rawRegions);
@@ -257,7 +262,7 @@ export default function Home() {
     } finally {
       setPageProcessing(false);
     }
-  }, [currentAnnotations.length, currentIndex, images, mergeOptions, modelStatus?.installed, openPanel, pageProcessing, updateAnnotations]);
+  }, [currentAnnotations.length, currentIndex, images, mergeOptions, modelInstalled, ocrModelKind, openPanel, pageProcessing, updateAnnotations]);
 
   const translateAll = useCallback(async () => {
     if (translating) return;
@@ -370,7 +375,7 @@ export default function Home() {
         </section>
       )}
       <About open={activePanel === "about"} onOpenChange={closePanel} />
-      <OcrModelManager open={activePanel === "ocr-model"} onOpenChange={closePanel} status={modelStatus} onStatusChange={setModelStatus} />
+      <OcrModelManager open={activePanel === "ocr-model"} onOpenChange={closePanel} status={modelStatus} onStatusChange={setModelStatus} kind={ocrModelKind} onKindChange={setOcrModelKind} />
       <OcrDebugSettings
         open={activePanel === "ocr-merge"}
         onOpenChange={closePanel}
@@ -381,7 +386,7 @@ export default function Home() {
         showRawBoundingBoxes={showRawBoundingBoxes}
         onShowRawBoundingBoxesChange={setShowRawBoundingBoxes}
         onPreview={runPageOCR}
-        canPreview={Boolean(images.length && modelStatus?.installed && !pageProcessing)}
+        canPreview={Boolean(images.length && modelInstalled && !pageProcessing)}
         onReset={() => {
           setMergeOptions({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
           setShowBoundingBoxes(DEFAULT_APP_PREFERENCES.showBoundingBoxes);

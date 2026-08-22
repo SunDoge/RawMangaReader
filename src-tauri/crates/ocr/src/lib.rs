@@ -87,7 +87,15 @@ pub struct OcrEngine {
 
 impl OcrEngine {
     pub fn new(model_directory: &Path) -> Result<Self> {
-        for filename in [DETECTION_MODEL, RECOGNITION_MODEL, CHARACTER_DICTIONARY] {
+        Self::new_with_models(model_directory, DETECTION_MODEL, RECOGNITION_MODEL)
+    }
+
+    pub fn new_with_models(
+        model_directory: &Path,
+        detection_model: &str,
+        recognition_model: &str,
+    ) -> Result<Self> {
+        for filename in [detection_model, recognition_model, CHARACTER_DICTIONARY] {
             let path = model_directory.join(filename);
             if !path.is_file() {
                 bail!("OCR model file is missing: {}", path.display());
@@ -95,8 +103,8 @@ impl OcrEngine {
         }
 
         let pipeline = OAROCRBuilder::new(
-            model_directory.join(DETECTION_MODEL),
-            model_directory.join(RECOGNITION_MODEL),
+            model_directory.join(detection_model),
+            model_directory.join(recognition_model),
             model_directory.join(CHARACTER_DICTIONARY),
         )
         .region_batch_size(64)

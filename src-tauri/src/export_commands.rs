@@ -9,7 +9,11 @@ pub fn write_exported_image(path: String, bytes: Vec<u8>) -> Result<(), String> 
         return Err("导出数据不是有效的 PNG".to_string());
     }
     let path = PathBuf::from(path);
-    if path.extension().and_then(|value| value.to_str()).is_none_or(|value| !value.eq_ignore_ascii_case("png")) {
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_none_or(|value| !value.eq_ignore_ascii_case("png"))
+    {
         return Err("导出文件必须使用 .png 扩展名".to_string());
     }
     fs::write(path, bytes).map_err(|error| error.to_string())
