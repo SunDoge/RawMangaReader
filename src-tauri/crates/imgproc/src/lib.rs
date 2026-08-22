@@ -133,8 +133,7 @@ pub fn crop_and_resize(
         (cropped_img.height() as f32 * ratio) as u32,
         FilterType::CatmullRom,
     );
-    let mut padded_img =
-        RgbImage::from_pixel(target_size as u32, target_size as u32, Rgb([114, 114, 114]));
+    let mut padded_img = RgbImage::from_pixel(target_size, target_size, Rgb([114, 114, 114]));
     let x = (target_size - resized_img.width()) / 2;
     let y = (target_size - resized_img.height()) / 2;
     padded_img.copy_from(&resized_img, x, y)?;
