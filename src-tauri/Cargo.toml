@@ -1,6 +1,6 @@
 [package]
 name = "raw-manga-reader"
-version = "0.1.5"
+version = "0.2.0"
 description = "A desktop OCR reader for vertical Japanese manga text"
 authors = ["SunDoge"]
 license = "MIT"
