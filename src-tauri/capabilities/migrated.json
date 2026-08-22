@@ -9,6 +9,17 @@
     "core:default",
     "dialog:default",
     "fs:default",
-    "log:default"
+    "log:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://api.x.ai/**"
+        },
+        {
+          "url": "https://api.cognitive.microsofttranslator.com/**"
+        }
+      ]
+    }
   ]
 }
