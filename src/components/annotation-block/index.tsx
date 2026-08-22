@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { ChevronLeft, ChevronRight, MousePointer2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Eye, EyeOff, MousePointer2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -22,6 +22,7 @@ interface AnnotationBlockProps extends IThumbnailListProps {
   showBoundingBoxes?: boolean;
   showRawBoundingBoxes?: boolean;
   translationOverlayOptions?: TranslationOverlayOptions;
+  onTranslationOverlayVisibilityChange?: (visible: boolean) => void;
 }
 
 export function AnnotationBlock({
@@ -37,6 +38,7 @@ export function AnnotationBlock({
   showBoundingBoxes = true,
   showRawBoundingBoxes = false,
   translationOverlayOptions = DEFAULT_TRANSLATION_OVERLAY_OPTIONS,
+  onTranslationOverlayVisibilityChange,
 }: AnnotationBlockProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const annotationListRef = useRef(annotationList);
@@ -187,6 +189,19 @@ export function AnnotationBlock({
           <Button variant="ghost" size="icon-sm" onClick={() => onSelected(currentIndex - 1)} disabled={currentIndex === 0}><ChevronLeft /></Button>
           <span className="min-w-24 text-center text-xs text-muted-foreground"><strong className="text-foreground">{currentIndex + 1}</strong> / {imageList.length}</span>
           <Button variant="ghost" size="icon-sm" onClick={() => onSelected(currentIndex + 1)} disabled={currentIndex === imageList.length - 1}><ChevronRight /></Button>
+          {onTranslationOverlayVisibilityChange ? (
+            <Button
+              variant={translationOverlayOptions.visible ? "secondary" : "ghost"}
+              size="sm"
+              className="ml-2 gap-1.5"
+              onClick={() => onTranslationOverlayVisibilityChange(!translationOverlayOptions.visible)}
+              aria-pressed={translationOverlayOptions.visible}
+              title={translationOverlayOptions.visible ? "隐藏图片上的译文" : "显示图片上的译文"}
+            >
+              {translationOverlayOptions.visible ? <Eye /> : <EyeOff />}
+              {translationOverlayOptions.visible ? "隐藏译文" : "显示译文"}
+            </Button>
+          ) : null}
         </div>
       </div>
       <aside className="min-h-0 border-l">
