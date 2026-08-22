@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createProxyTransport, proxyClientOptions, type HttpTransport } from "./proxy";
+import { createProxyTransport, nativeProxyArguments, proxyClientOptions, type HttpTransport } from "./proxy";
 
 describe("HTTP proxy transport", () => {
   it("adds the configured proxy to Tauri HTTP requests", async () => {
@@ -12,5 +12,13 @@ describe("HTTP proxy transport", () => {
     expect(proxyClientOptions({ proxyEnabled: false, proxyUrl: "bad", proxyNoProxy: "" })).toEqual({});
     expect(() => proxyClientOptions({ proxyEnabled: true, proxyUrl: "", proxyNoProxy: "" })).toThrow("尚未填写");
     expect(() => proxyClientOptions({ proxyEnabled: true, proxyUrl: "ftp://localhost", proxyNoProxy: "" })).toThrow("仅支持");
+  });
+
+  it("never omits required native command arguments for legacy settings", () => {
+    expect(nativeProxyArguments({})).toEqual({
+      enabled: false,
+      url: "http://127.0.0.1:7890",
+      noProxy: "localhost,127.0.0.1",
+    });
   });
 });

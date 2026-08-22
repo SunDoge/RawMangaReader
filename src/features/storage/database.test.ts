@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto";
 import { afterEach, describe, expect, it } from "vitest";
-import { initializeFrontendStorage, persistPreferences, persistRecentSources, RawMangaReaderDatabase } from "./database";
+import { initializeFrontendStorage, normalizePreferences, persistPreferences, persistRecentSources, RawMangaReaderDatabase } from "./database";
 
 const databases: RawMangaReaderDatabase[] = [];
 const createDatabase = () => { const database = new RawMangaReaderDatabase(`test-${crypto.randomUUID()}`); databases.push(database); return database; };
@@ -19,5 +19,14 @@ describe("Dexie frontend storage", () => {
     const reloaded = await initializeFrontendStorage(database);
     expect(reloaded.preferences.showBoundingBoxes).toBe(false);
     expect(reloaded.recentSources[0].path).toBe("/001.jpg");
+  });
+
+  it("fills proxy fields missing from legacy preference records", () => {
+    const preferences = normalizePreferences({ translationSettings: { provider: "microsoft-edge" } as never });
+    expect(preferences.translationSettings).toMatchObject({
+      proxyEnabled: false,
+      proxyUrl: "http://127.0.0.1:7890",
+      proxyNoProxy: "localhost,127.0.0.1",
+    });
   });
 });
