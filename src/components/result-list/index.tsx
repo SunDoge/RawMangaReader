@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { IAnnotationType } from "@/types/annotation";
-import { Check, Copy, LoaderCircle, Play, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Copy, Languages, LoaderCircle, Play, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,10 +15,12 @@ interface IResultListProps {
   onRemove?: (index: number, length?: number) => void;
   onUpdate?: (index: number, patch: Partial<IAnnotationType>) => void;
   onOCRClick?: (data: IAnnotationType, index: number) => void;
+  onTranslateAll?: () => void;
+  translating?: boolean;
 }
 
 export function ResultList(props: IResultListProps) {
-  const { annotations, selected, onOCRClick, onRemove, onSelect, onUpdate } = props;
+  const { annotations, selected, onOCRClick, onRemove, onSelect, onUpdate, onTranslateAll, translating } = props;
 
   const handleCopyAll = useCallback(async () => {
     const text = annotations.map((annotation, index) => `${index + 1}: ${annotation.ocr || ""}`).join("\n");
@@ -36,9 +38,12 @@ export function ResultList(props: IResultListProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
-      <div className="grid grid-cols-3 gap-1.5 border-b p-2">
+      <div className="grid grid-cols-4 gap-1.5 border-b p-2">
         <Button variant="outline" size="xs" onClick={() => void handleCopyAll()} disabled={!annotations.length}><Copy />复制</Button>
         <Button variant="outline" size="xs" onClick={handleOCRAll} disabled={!annotations.length}><Play />检测</Button>
+        <Button variant="outline" size="xs" onClick={onTranslateAll} disabled={translating || !annotations.some((item) => item.ocr?.trim())}>
+          {translating ? <LoaderCircle className="animate-spin" /> : <Languages />}翻译
+        </Button>
         <Button variant="destructive" size="xs" onClick={handleClearAll} disabled={!annotations.length}><Trash2 />清空</Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">
@@ -65,6 +70,15 @@ export function ResultList(props: IResultListProps) {
               onClick={(event) => event.stopPropagation()}
               onChange={(event) => onUpdate?.(index, { ocr: event.target.value })}
             />
+            {annotation.translation != null ? (
+              <textarea
+                className="mt-2 min-h-16 w-full resize-y rounded-md border bg-muted/30 px-2 py-1.5 text-xs leading-5 outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/30"
+                value={annotation.translation}
+                placeholder="译文"
+                onClick={(event) => event.stopPropagation()}
+                onChange={(event) => onUpdate?.(index, { translation: event.target.value })}
+              />
+            ) : null}
             <div className="mt-2 flex items-center gap-1 text-[11px] text-muted-foreground">
               {annotation.status === "finished" ? <Check className="size-3 text-emerald-500" /> : null}
               {annotation.error ? "识别失败" : annotation.status === "processing" ? "处理中" : annotation.status === "finished" ? `已完成${annotation.confidence != null ? ` · ${(annotation.confidence * 100).toFixed(1)}%` : ""}` : "未处理"}

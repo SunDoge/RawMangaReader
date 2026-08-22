@@ -13,6 +13,8 @@ interface AnnotationBlockProps extends IThumbnailListProps {
   annotationList: IAnnotationType[];
   onAnnotationListChange: (list: IAnnotationType[]) => void;
   onOCR: (annotation: IAnnotationType) => Promise<Partial<IAnnotationType>>;
+  onTranslateAll?: () => void;
+  translating?: boolean;
 }
 
 export function AnnotationBlock({
@@ -22,6 +24,8 @@ export function AnnotationBlock({
   onSelected,
   onAnnotationListChange,
   onOCR,
+  onTranslateAll,
+  translating,
 }: AnnotationBlockProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const annotationListRef = useRef(annotationList);
@@ -115,13 +119,25 @@ export function AnnotationBlock({
               {visibleAnnotations.map((annotation, index) => (
                 <button
                   key={annotation.id}
-                  className={cn("absolute border-2 border-primary bg-primary/10 transition hover:bg-primary/20", selected === index && "border-amber-400 bg-amber-400/20 ring-2 ring-black/40")}
+                  className={cn(
+                    "absolute flex items-center justify-center border-2 border-primary bg-primary/10 p-0.5 transition hover:bg-primary/20",
+                    annotation.translation && "bg-background/95 hover:bg-background",
+                    selected === index && "border-amber-400 ring-2 ring-black/40",
+                  )}
                   style={{ left: `${annotation.x * 100}%`, top: `${annotation.y * 100}%`, width: `${annotation.width * 100}%`, height: `${annotation.height * 100}%` }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setSelected(index)}
                   aria-label={`选择区域 ${index + 1}`}
                 >
                   <Badge className="absolute -top-6 left-0 h-5 rounded-sm bg-amber-500 px-1.5 text-[10px] text-black">{index + 1}</Badge>
+                  {annotation.translation ? (
+                    <span
+                      className="line-clamp-[8] whitespace-pre-wrap break-words text-center font-medium leading-tight text-foreground"
+                      style={{ fontSize: "clamp(10px, 1.25vw, 18px)" }}
+                    >
+                      {annotation.translation}
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -139,7 +155,7 @@ export function AnnotationBlock({
         </div>
       </div>
       <aside className="min-h-0 border-l">
-        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onUpdate={updateAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} />
+        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onUpdate={updateAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} onTranslateAll={onTranslateAll} translating={translating} />
       </aside>
     </div>
   );
