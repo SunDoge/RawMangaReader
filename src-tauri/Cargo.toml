@@ -40,7 +40,6 @@ opt-level = 2
 [workspace]
 members = [
     "./",
-    "crates/imgproc",
     "crates/ocr",
     "crates/text-det",
 ]

@@ -32,6 +32,19 @@ pub fn write_exported_image(path: String, bytes: Vec<u8>) -> Result<(), String> 
     fs::write(path, bytes).map_err(|error| error.to_string())
 }
 
+#[tauri::command]
+pub fn write_exported_text(path: String, text: String) -> Result<(), String> {
+    let path = PathBuf::from(path);
+    if path
+        .extension()
+        .and_then(|value| value.to_str())
+        .is_none_or(|value| !value.eq_ignore_ascii_case("txt"))
+    {
+        return Err("文本导出文件必须使用 .txt 扩展名".to_string());
+    }
+    fs::write(path, text.as_bytes()).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -39,5 +52,10 @@ mod tests {
     #[test]
     fn rejects_non_png_export_data() {
         assert!(write_exported_image("test.png".into(), vec![1, 2, 3]).is_err());
+    }
+
+    #[test]
+    fn rejects_a_non_txt_text_export_path() {
+        assert!(write_exported_text("test.png".into(), "text".into()).is_err());
     }
 }

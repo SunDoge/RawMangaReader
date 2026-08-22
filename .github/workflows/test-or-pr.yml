@@ -1,52 +1,59 @@
-name: "test-on-pr"
-on: [pull_request]
+name: CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   test-tauri:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ubuntu-22.04] # Too expensive on windows and macos.
+    name: Test and build Tauri v2
+    # ort's prebuilt ONNX Runtime requires a newer libstdc++ ABI than 22.04 ships.
+    runs-on: ubuntu-24.04
 
-    runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - name: install Rust stable
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-      - name: Rust cache
-        uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        uses: awalsh128/cache-apt-pkgs-action@latest
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
-          packages: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
-          version: 2.0
+          workspaces: src-tauri -> target
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 11
-      - name: Setup node
+
+      - name: Install Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          cache: "pnpm"
-      - name: install frontend dependencies
+          node-version: 22.22.0
+          cache: pnpm
+
+      - name: Install frontend dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: test frontend
+      - name: Test frontend
         run: pnpm test
 
-      - name: build frontend
-        run: pnpm build
+      - name: Test Rust workspace
+        run: cargo test --manifest-path src-tauri/Cargo.toml --workspace --locked
 
-      - name: test Rust workspace
-        run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
-
-      - uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build Tauri application
+        uses: tauri-apps/tauri-action@v1
+        with:
+          args: --no-bundle

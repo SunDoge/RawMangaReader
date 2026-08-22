@@ -4,10 +4,10 @@ use std::time::Instant;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let image_path = std::env::args()
         .nth(1)
-        .ok_or("usage: cargo run -p ocr --example smoke -- <image> <model-directory>")?;
+        .ok_or("usage: cargo run -p ocr --features examples --example smoke -- <image> <model-directory>")?;
     let model_directory = std::env::args()
         .nth(2)
-        .ok_or("usage: cargo run -p ocr --example smoke -- <image> <model-directory>")?;
+        .ok_or("usage: cargo run -p ocr --features examples --example smoke -- <image> <model-directory>")?;
 
     let raw = std::env::args().any(|argument| argument == "--raw");
     let load_started = Instant::now();
