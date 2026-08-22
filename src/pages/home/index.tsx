@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles } from "lucide-react";
+import { Database, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
@@ -15,6 +15,7 @@ import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
 import { OcrDebugSettings } from "@/components/ocr-debug-settings";
 import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
+import { CacheManager } from "@/components/cache-manager";
 import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
@@ -29,6 +30,7 @@ export default function Home() {
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
   const [ocrSettingsOpen, setOcrSettingsOpen] = useState(false);
   const [translationOverlaySettingsOpen, setTranslationOverlaySettingsOpen] = useState(false);
+  const [cacheManagerOpen, setCacheManagerOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -224,6 +226,7 @@ export default function Home() {
             <DropdownMenuItem onClick={() => setModelManagerOpen(true)}><HardDrive />OCR 模型</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setOcrSettingsOpen(true)}><SlidersHorizontal />OCR 合并调试</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setTranslationOverlaySettingsOpen(true)}><Languages />译文回填</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setCacheManagerOpen(true)}><Database />缓存</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -267,6 +270,7 @@ export default function Home() {
         onOptionsChange={setTranslationOverlayOptions}
         onReset={() => setTranslationOverlayOptions({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS })}
       />
+      <CacheManager open={cacheManagerOpen} onOpenChange={setCacheManagerOpen} />
     </main>
   );
 }

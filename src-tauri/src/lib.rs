@@ -38,6 +38,8 @@ pub fn run() {
             ocr_commands::recognize_region,
             ocr_commands::register_images,
             ocr_commands::release_images,
+            ocr_commands::get_image_cache_stats,
+            ocr_commands::clear_image_cache,
             preload_scheduler::schedule_image_preload,
         ])
         .run(tauri::generate_context!())

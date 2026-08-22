@@ -60,6 +60,21 @@ export interface PrefetchedOcr {
   regions: OcrRegion[];
 }
 
+export type ImageCacheKind = "decoded" | "ocr" | "all";
+
+export interface ImageCacheStats {
+  activeImages: number;
+  decodedEntries: number;
+  decodedBytes: number;
+  decodedCapacityBytes: number;
+  ocrMemoryEntries: number;
+  ocrMemoryBytes: number;
+  ocrMemoryCapacityBytes: number;
+  ocrDiskCapacityBytes: number;
+  ocrDiskReadBytes: number;
+  ocrDiskWriteBytes: number;
+}
+
 export const DEFAULT_VERTICAL_MERGE_OPTIONS: VerticalMergeOptions = {
   enabled: true,
   minAspectRatio: 1.2,
@@ -85,6 +100,12 @@ export const releaseImages = (imageIds: string[]) =>
 
 export const scheduleImagePreload = (request: ImagePreloadRequest) =>
   invoke<void>("schedule_image_preload", { request });
+
+export const getImageCacheStats = () =>
+  invoke<ImageCacheStats>("get_image_cache_stats");
+
+export const clearImageCache = (kind: ImageCacheKind) =>
+  invoke<ImageCacheStats>("clear_image_cache", { kind });
 
 export const recognizePage = (
   imageId: string,

@@ -4,7 +4,7 @@ use foyer::{
     HybridCacheBuilder, HybridCachePolicy, PsyncIoEngineConfig,
 };
 use image::RgbImage;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use slotmap::{DefaultKey, Key, KeyData, SlotMap};
 use std::fs;
@@ -21,6 +21,29 @@ const OCR_DISK_CACHE_BYTES: usize = 512 * 1024 * 1024;
 pub struct RegisteredImage {
     pub id: String,
     pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageCacheStats {
+    pub active_images: usize,
+    pub decoded_entries: usize,
+    pub decoded_bytes: usize,
+    pub decoded_capacity_bytes: usize,
+    pub ocr_memory_entries: usize,
+    pub ocr_memory_bytes: usize,
+    pub ocr_memory_capacity_bytes: usize,
+    pub ocr_disk_capacity_bytes: usize,
+    pub ocr_disk_read_bytes: usize,
+    pub ocr_disk_write_bytes: usize,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum CacheKind {
+    Decoded,
+    Ocr,
+    All,
 }
 
 #[derive(Debug, Clone)]
@@ -146,6 +169,38 @@ impl ImageStore {
         &self.ocr
     }
 
+    pub fn stats(&self) -> Result<ImageCacheStats> {
+        let active_images = self
+            .resources
+            .lock()
+            .map_err(|_| anyhow::anyhow!("image store lock is poisoned"))?
+            .len();
+        let ocr_memory = self.ocr.memory();
+        let disk = self.ocr.storage().statistics();
+        Ok(ImageCacheStats {
+            active_images,
+            decoded_entries: self.decoded.entries(),
+            decoded_bytes: self.decoded.usage(),
+            decoded_capacity_bytes: self.decoded.capacity(),
+            ocr_memory_entries: ocr_memory.entries(),
+            ocr_memory_bytes: ocr_memory.usage(),
+            ocr_memory_capacity_bytes: ocr_memory.capacity(),
+            ocr_disk_capacity_bytes: OCR_DISK_CACHE_BYTES,
+            ocr_disk_read_bytes: disk.disk_read_bytes(),
+            ocr_disk_write_bytes: disk.disk_write_bytes(),
+        })
+    }
+
+    pub async fn clear(&self, kind: CacheKind) -> Result<()> {
+        if matches!(kind, CacheKind::Decoded | CacheKind::All) {
+            self.decoded.clear();
+        }
+        if matches!(kind, CacheKind::Ocr | CacheKind::All) {
+            self.ocr.clear().await?;
+        }
+        Ok(())
+    }
+
     fn resource(&self, id: &str) -> Result<ImageResource> {
         let key = decode_key(id).ok_or_else(|| anyhow::anyhow!("invalid image id"))?;
         self.resources
@@ -245,8 +300,13 @@ mod tests {
             store.decoded(&registered[0].id).unwrap().dimensions(),
             (2, 3)
         );
+        let stats = store.stats().unwrap();
+        assert_eq!(stats.active_images, 1);
+        assert_eq!(stats.decoded_entries, 1);
+        assert_eq!(stats.decoded_bytes, 18);
         store.release(&[registered[0].id.clone()]).unwrap();
         assert!(store.decoded(&registered[0].id).is_err());
+        assert_eq!(store.stats().unwrap().active_images, 0);
 
         store.ocr.insert("page-key".to_owned(), vec![1, 2, 3]);
         tauri::async_runtime::block_on(store.ocr.storage().wait());
@@ -254,6 +314,11 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(&*cached, &[1, 2, 3]);
+        tauri::async_runtime::block_on(store.clear(CacheKind::All)).unwrap();
+        assert_eq!(store.stats().unwrap().decoded_entries, 0);
+        assert!(tauri::async_runtime::block_on(store.ocr.get("page-key"))
+            .unwrap()
+            .is_none());
         tauri::async_runtime::block_on(store.ocr.close()).unwrap();
         drop(store);
         fs::remove_dir_all(directory).unwrap();
