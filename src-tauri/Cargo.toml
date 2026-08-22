@@ -34,6 +34,7 @@ opt-level = 2
 members = [
     "./",
     "crates/imgproc",
+    "crates/ocr",
     "crates/text-det",
 ]
 exclude = ["crates/manga-ocr", "manga-ocr-onnx"]
