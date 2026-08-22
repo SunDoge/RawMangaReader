@@ -14,7 +14,8 @@ permissions:
 jobs:
   test-tauri:
     name: Test and build Tauri v2
-    runs-on: ubuntu-22.04
+    # ort's prebuilt ONNX Runtime requires a newer libstdc++ ABI than 22.04 ships.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v7
