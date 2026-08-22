@@ -1,4 +1,4 @@
-use crate::image_store::{ocr_cache_key, ImageStore, RegisteredImage};
+use crate::image_store::{ocr_cache_key, CacheKind, ImageCacheStats, ImageStore, RegisteredImage};
 use ocr::{
     OcrEngine, OcrRegion, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY, DETECTION_MODEL,
     MODEL_VERSION, RECOGNITION_MODEL,
@@ -358,6 +358,25 @@ pub fn release_images(
     images
         .release(&image_ids)
         .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn get_image_cache_stats(
+    images: State<'_, Arc<ImageStore>>,
+) -> Result<ImageCacheStats, String> {
+    images.stats().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub async fn clear_image_cache(
+    images: State<'_, Arc<ImageStore>>,
+    kind: CacheKind,
+) -> Result<ImageCacheStats, String> {
+    images
+        .clear(kind)
+        .await
+        .map_err(|error| error.to_string())?;
+    images.stats().map_err(|error| error.to_string())
 }
 
 #[cfg(test)]
