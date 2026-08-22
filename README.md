@@ -1,5 +1,18 @@
 # RawMangaReader
 
+## Development
+
+This repository uses [mise](https://mise.jdx.dev/) to install
+[Cocogitto](https://docs.cocogitto.io/) and Conventional Commits for new work.
+
+```sh
+mise install
+cog install-hook commit-msg
+cog commit feat "describe the change"
+```
+
+Use `cog verify "feat: describe the change"` to validate a commit message.
+
 [![Chat](https://img.shields.io/discord/1392350820049359082?logo=discord&style=flat-square)](https://discord.gg/Xx9ENErjfq)
 
 一个支持竖排日文的OCR软件，专为生肉漫画设计。
