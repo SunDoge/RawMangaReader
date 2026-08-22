@@ -1,0 +1,50 @@
+import { useState } from "react";
+import { LoaderCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import type { OpenRouterComparisonResult } from "@/features/translation/providers/openrouter";
+import type { TranslationProvider, TranslationSettings } from "@/features/translation/settings";
+
+interface TranslationProviderSettingsProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  settings: TranslationSettings;
+  onSettingsChange: (settings: TranslationSettings) => void;
+  onCompare: () => Promise<OpenRouterComparisonResult[]>;
+  canCompare: boolean;
+}
+
+const fieldClass = "h-9 rounded-md border bg-background px-2 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
+
+export function TranslationProviderSettings({ open, onOpenChange, settings, onSettingsChange, onCompare, canCompare }: TranslationProviderSettingsProps) {
+  const [comparing, setComparing] = useState(false);
+  const [results, setResults] = useState<OpenRouterComparisonResult[]>([]);
+  const update = (patch: Partial<TranslationSettings>) => onSettingsChange({ ...settings, ...patch });
+
+  const compare = async () => {
+    setComparing(true);
+    try { setResults(await onCompare()); } finally { setComparing(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-xl">
+        <DialogHeader>
+          <DialogTitle>翻译服务</DialogTitle>
+          <DialogDescription>基础翻译可使用 Microsoft Edge；OpenRouter 密钥目前只保存在本次应用会话中。</DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4">
+          <label className="grid gap-1.5 text-xs"><span>当前服务</span><select className={fieldClass} value={settings.provider} onChange={(event) => update({ provider: event.target.value as TranslationProvider })}><option value="microsoft-edge">Microsoft Edge（无需密钥）</option><option value="openrouter">OpenRouter</option></select></label>
+          <label className="grid gap-1.5 text-xs"><span>OpenRouter API Key</span><input className={fieldClass} type="password" autoComplete="off" placeholder="sk-or-v1-…" value={settings.openRouterApiKey} onChange={(event) => update({ openRouterApiKey: event.target.value })} /></label>
+          <label className="grid gap-1.5 text-xs"><span>翻译模型</span><input className={fieldClass} spellCheck={false} value={settings.openRouterModel} onChange={(event) => update({ openRouterModel: event.target.value })} /></label>
+          <label className="grid gap-1.5 text-xs"><span>对比模型（逗号或换行分隔）</span><textarea className="min-h-20 rounded-md border bg-background p-2 font-mono text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30" spellCheck={false} value={settings.comparisonModels} onChange={(event) => update({ comparisonModels: event.target.value })} /></label>
+          {results.length ? <div className="grid gap-2 rounded-lg border p-3 text-xs">{results.map((result) => <div key={result.model} className="grid gap-1 border-b pb-2 last:border-0 last:pb-0"><div className="flex justify-between gap-3 font-mono"><span className="truncate">{result.model}</span><span className="shrink-0 text-muted-foreground">{result.durationMs} ms</span></div>{result.error ? <p className="text-destructive">{result.error}</p> : <p className="line-clamp-3 text-muted-foreground">{result.translations?.join(" / ")}</p>}</div>)}</div> : null}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={!canCompare || comparing || !settings.openRouterApiKey.trim()} onClick={() => void compare()}>{comparing ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : null}对比当前页</Button>
+          <Button onClick={() => onOpenChange(false)}>完成</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

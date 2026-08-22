@@ -21,6 +21,9 @@
         },
         {
           "url": "https://edge.microsoft.com/**"
+        },
+        {
+          "url": "https://openrouter.ai/**"
         }
       ]
     }
