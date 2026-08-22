@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ChevronDown, Clock3, Database, FileDown, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { ChevronDown, Clock3, Database, FileDown, FileImage, FileText, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
@@ -26,6 +26,7 @@ import { addRecentSources, sourceName, type RecentSource } from "@/features/rece
 import { initializeFrontendStorage, persistPreferences, persistRecentSources } from "@/features/storage/database";
 import { configureHttpProxy, configureNativeHttpProxy } from "@/features/http/proxy";
 import { renderTranslatedPng, writeExportedImage } from "@/features/export/render";
+import { buildOcrText, writeExportedText } from "@/features/export/text";
 import type { IAnnotationType } from "@/types/annotation";
 import { naturalSort, prioritizeImageIds } from "./utils";
 
@@ -43,6 +44,7 @@ export default function Home() {
   const [ocrModelKind, setOcrModelKind] = useState<OcrModelKind>(DEFAULT_APP_PREFERENCES.ocrModelKind);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [textExporting, setTextExporting] = useState(false);
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(DEFAULT_APP_PREFERENCES.showBoundingBoxes);
   const [showRawBoundingBoxes, setShowRawBoundingBoxes] = useState(DEFAULT_APP_PREFERENCES.showRawBoundingBoxes);
@@ -312,6 +314,50 @@ export default function Home() {
     }
   }, [currentAnnotations, currentIndex, images, translationOverlayOptions]);
 
+  const exportOcrText = useCallback(async (scope: "current" | "all") => {
+    if (textExporting || !images.length) return;
+    const targetImages = scope === "current" ? [images[currentIndex]] : images;
+    const hasMissingPage = targetImages.some((image) => {
+      const existing = image.id === images[currentIndex]?.id ? currentAnnotations : annotations.current.get(image.id);
+      return !existing?.some((item) => item.ocr?.trim());
+    });
+    if (hasMissingPage && !modelInstalled) {
+      toast.error("部分页面尚未识别，请先安装当前 OCR 模型");
+      openPanel("ocr-model");
+      return;
+    }
+    const firstName = targetImages[0]?.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "manga";
+    const outputPath = await save({ defaultPath: scope === "current" ? `${firstName}-ocr.txt` : `${firstName}-all-ocr.txt`, filters: [{ name: "文本文件", extensions: ["txt"] }] });
+    if (!outputPath) return;
+
+    setTextExporting(true);
+    try {
+      const pages: IAnnotationType[][] = [];
+      for (const image of targetImages) {
+        let page = image.id === images[currentIndex]?.id ? currentAnnotations : annotations.current.get(image.id);
+        if (!page?.some((item) => item.ocr?.trim())) {
+          const result = await recognizePage(image.id, mergeOptions, ocrModelKind);
+          page = regionsToAnnotations(result.regions);
+          annotations.current.set(image.id, page);
+          rawRegions.current.set(image.id, result.rawRegions);
+          if (image.id === images[currentIndex]?.id) {
+            setCurrentAnnotations(page);
+            setCurrentRawRegions(result.rawRegions);
+          }
+        }
+        pages.push(page ?? []);
+      }
+      const text = buildOcrText(pages);
+      if (!text) throw new Error("没有可导出的 OCR 原文");
+      await writeExportedText(outputPath, text);
+      toast.success(scope === "current" ? "当前页原文已导出" : `全部 ${targetImages.length} 页原文已导出`, { description: outputPath });
+    } catch (error) {
+      toast.error("导出原文失败", { description: formatAppError(error) });
+    } finally {
+      setTextExporting(false);
+    }
+  }, [currentAnnotations, currentIndex, images, mergeOptions, modelInstalled, ocrModelKind, openPanel, textExporting]);
+
   const importActions = (
     <>
       <Button size="sm" onClick={() => void openImages()}><ImagePlus data-icon="inline-start" />选择图片</Button>
@@ -340,7 +386,14 @@ export default function Home() {
               {translating ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <Languages data-icon="inline-start" />}
               {translating ? "翻译中" : "翻译当前页"}
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => void exportCurrentPage()} disabled={!currentAnnotations.some((item) => item.translation?.trim())}><FileDown data-icon="inline-start" />导出嵌字</Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button size="sm" variant="ghost" disabled={textExporting}>{textExporting ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <FileDown data-icon="inline-start" />}导出<ChevronDown data-icon="inline-end" /></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => void exportCurrentPage()} disabled={!currentAnnotations.some((item) => item.translation?.trim())}><FileDown />当前页嵌字 PNG</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportOcrText("current")}><FileText />当前页原文 TXT</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => void exportOcrText("all")}><FileText />全部页面原文 TXT</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div> : null}
         </div>
         <div className="flex items-center gap-1">{images.length ? <Badge variant="secondary">{images.length} 页</Badge> : null}<DropdownMenu>
