@@ -1,5 +1,5 @@
 use anyhow::{bail, Context, Result};
-use image::imageops;
+use image::{imageops, RgbImage};
 use oar_ocr::prelude::{OAROCRBuilder, TextRegion, OAROCR};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -40,14 +40,14 @@ impl Default for VerticalMergeOptions {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OcrPoint {
     pub x: f32,
     pub y: f32,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OcrRegion {
     pub x: f32,
@@ -103,10 +103,18 @@ impl OcrEngine {
         let image = image::open(image_path)
             .with_context(|| format!("failed to open image: {}", image_path.display()))?
             .to_rgb8();
+        self.recognize_page_image(&image, merge_options)
+    }
+
+    pub fn recognize_page_image(
+        &self,
+        image: &RgbImage,
+        merge_options: VerticalMergeOptions,
+    ) -> Result<Vec<OcrRegion>> {
         let (width, height) = image.dimensions();
         let results = self
             .pipeline
-            .predict(vec![image])
+            .predict(vec![image.clone()])
             .context("PP-OCRv6 page inference failed")?;
 
         let mut regions = results[0]
@@ -130,6 +138,15 @@ impl OcrEngine {
         let image = image::open(image_path)
             .with_context(|| format!("failed to open image: {}", image_path.display()))?
             .to_rgb8();
+        self.recognize_region_image(&image, rect)
+    }
+
+    pub fn recognize_region_image(
+        &self,
+        image: &RgbImage,
+        rect: RelativeRect,
+    ) -> Result<RegionRecognition> {
+        validate_rect(rect)?;
         let (image_width, image_height) = image.dimensions();
         let x = (rect.x * image_width as f32).floor() as u32;
         let y = (rect.y * image_height as f32).floor() as u32;
@@ -141,7 +158,7 @@ impl OcrEngine {
             bail!("OCR region is outside the image");
         }
 
-        let crop = imageops::crop_imm(&image, x, y, width, height).to_image();
+        let crop = imageops::crop_imm(image, x, y, width, height).to_image();
         let results = self
             .pipeline
             .predict(vec![crop])
