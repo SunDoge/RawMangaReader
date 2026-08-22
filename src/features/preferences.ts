@@ -5,6 +5,7 @@ import { DEFAULT_TRANSLATION_SETTINGS, type TranslationSettings } from "@/featur
 export interface AppPreferences {
   mergeOptions: VerticalMergeOptions;
   showBoundingBoxes: boolean;
+  showRawBoundingBoxes: boolean;
   translationOverlayOptions: TranslationOverlayOptions;
   translationSettings: Omit<TranslationSettings, "openRouterApiKey">;
 }
@@ -12,6 +13,7 @@ export interface AppPreferences {
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
   mergeOptions: { ...DEFAULT_VERTICAL_MERGE_OPTIONS },
   showBoundingBoxes: true,
+  showRawBoundingBoxes: false,
   translationOverlayOptions: { ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS },
   translationSettings: {
     provider: DEFAULT_TRANSLATION_SETTINGS.provider,

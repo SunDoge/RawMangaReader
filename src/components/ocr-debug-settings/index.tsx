@@ -17,6 +17,8 @@ interface OcrDebugSettingsProps {
   onOptionsChange: (options: VerticalMergeOptions) => void;
   showBoundingBoxes: boolean;
   onShowBoundingBoxesChange: (show: boolean) => void;
+  showRawBoundingBoxes: boolean;
+  onShowRawBoundingBoxesChange: (show: boolean) => void;
   onPreview: () => Promise<void>;
   canPreview: boolean;
   onReset: () => void;
@@ -58,6 +60,8 @@ export function OcrDebugSettings({
   onOptionsChange,
   showBoundingBoxes,
   onShowBoundingBoxesChange,
+  showRawBoundingBoxes,
+  onShowRawBoundingBoxesChange,
   onPreview,
   canPreview,
   onReset,
@@ -83,6 +87,10 @@ export function OcrDebugSettings({
               checked={options.enabled}
               onChange={(event) => update({ enabled: event.target.checked })}
             />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border p-3 text-xs">
+            <span>显示模型原始 bbox（调试）</span>
+            <input className="size-4 accent-primary" type="checkbox" checked={showRawBoundingBoxes} onChange={(event) => onShowRawBoundingBoxesChange(event.target.checked)} />
           </label>
           <label className="flex items-center justify-between rounded-lg border p-3 text-xs">
             <span>在图像上显示 bbox</span>

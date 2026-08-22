@@ -1,4 +1,5 @@
 mod image_store;
+mod library_commands;
 mod ocr_commands;
 mod preload_scheduler;
 
@@ -15,7 +16,6 @@ pub fn run() {
         .manage(Arc::clone(&ocr))
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_http::init())
         .setup(move |app| {
             let cache_directory = app.path().app_cache_dir()?.join("image-cache");
@@ -40,6 +40,7 @@ pub fn run() {
             ocr_commands::release_images,
             ocr_commands::get_image_cache_stats,
             ocr_commands::clear_image_cache,
+            library_commands::list_image_files,
             preload_scheduler::schedule_image_preload,
         ])
         .run(tauri::generate_context!())

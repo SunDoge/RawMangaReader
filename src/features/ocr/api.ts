@@ -23,6 +23,11 @@ export interface OcrRegion {
   confidence: number;
 }
 
+export interface PageRecognition {
+  regions: OcrRegion[];
+  rawRegions: OcrRegion[];
+}
+
 export interface RegionRecognition {
   text: string;
   confidence: number;
@@ -62,6 +67,7 @@ export interface PrefetchedOcr {
   requestId: string;
   imageId: string;
   regions: OcrRegion[];
+  rawRegions: OcrRegion[];
 }
 
 export type ImageCacheKind = "decoded" | "ocr" | "all";
@@ -100,6 +106,9 @@ export const downloadOcrModel = () =>
 export const removeOcrModel = () =>
   invoke<OcrModelStatus>("remove_ocr_model");
 
+export const listImageFiles = (folder: string) =>
+  invoke<string[]>("list_image_files", { folder });
+
 export const registerImages = (paths: string[]) =>
   invoke<RegisteredImage[]>("register_images", { paths });
 
@@ -118,7 +127,7 @@ export const clearImageCache = (kind: ImageCacheKind) =>
 export const recognizePage = (
   imageId: string,
   mergeOptions: VerticalMergeOptions = DEFAULT_VERTICAL_MERGE_OPTIONS,
-) => invoke<OcrRegion[]>("recognize_page", { imageId, mergeOptions });
+) => invoke<PageRecognition>("recognize_page", { imageId, mergeOptions });
 
 export const recognizeRegion = (
   imageId: string,

@@ -24,6 +24,7 @@ struct PrefetchedOcr {
     request_id: String,
     image_id: String,
     regions: Vec<OcrRegion>,
+    raw_regions: Vec<OcrRegion>,
 }
 
 pub struct PreloadScheduler {
@@ -73,13 +74,14 @@ impl PreloadScheduler {
                             request = newer;
                             continue 'generation;
                         }
-                        let Ok(regions) = result else { continue };
+                        let Ok(result) = result else { continue };
                         let _ = app.emit(
                             OCR_PREFETCH_EVENT,
                             PrefetchedOcr {
                                 request_id: request.request_id.clone(),
                                 image_id,
-                                regions,
+                                regions: result.regions,
+                                raw_regions: result.raw_regions,
                             },
                         );
                     }

@@ -1,8 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Clock3, Database, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
-import { readDir } from "@tauri-apps/plugin-fs";
-import { join } from "@tauri-apps/api/path";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -17,7 +15,7 @@ import { OcrDebugSettings } from "@/components/ocr-debug-settings";
 import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
 import { TranslationProviderSettings } from "@/components/translation-provider-settings";
 import { CacheManager } from "@/components/cache-manager";
-import { getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
+import { getOcrModelStatus, listImageFiles, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type OcrRegion, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import { compareOpenRouterModels, translateWithOpenRouter } from "@/features/translation/providers/openrouter";
@@ -27,7 +25,7 @@ import { DEFAULT_APP_PREFERENCES, formatAppError } from "@/features/preferences"
 import { addRecentSources, sourceName, type RecentSource } from "@/features/recent-sources";
 import { initializeFrontendStorage, persistPreferences, persistRecentSources } from "@/features/storage/database";
 import type { IAnnotationType } from "@/types/annotation";
-import { isSupportedImage, naturalSort, prioritizeImageIds } from "./utils";
+import { naturalSort, prioritizeImageIds } from "./utils";
 
 export default function Home() {
   const [images, setImages] = useState<RegisteredImage[]>([]);
@@ -45,13 +43,16 @@ export default function Home() {
   const [translating, setTranslating] = useState(false);
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(DEFAULT_APP_PREFERENCES.showBoundingBoxes);
+  const [showRawBoundingBoxes, setShowRawBoundingBoxes] = useState(DEFAULT_APP_PREFERENCES.showRawBoundingBoxes);
   const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>({ ...DEFAULT_APP_PREFERENCES.translationOverlayOptions });
   const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...DEFAULT_APP_PREFERENCES.translationSettings, openRouterApiKey: import.meta.env.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY ?? "") : "" });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
+  const rawRegions = useRef(new Map<string, OcrRegion[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
   const currentIndexRef = useRef(0);
   const preloadRequestRef = useRef("");
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
+  const [currentRawRegions, setCurrentRawRegions] = useState<OcrRegion[]>([]);
 
   useEffect(() => {
     void getOcrModelStatus()
@@ -64,6 +65,7 @@ export default function Home() {
       .then(({ preferences, recentSources: storedSources }) => {
         setMergeOptions(preferences.mergeOptions);
         setShowBoundingBoxes(preferences.showBoundingBoxes);
+        setShowRawBoundingBoxes(preferences.showRawBoundingBoxes);
         setTranslationOverlayOptions(preferences.translationOverlayOptions);
         setTranslationSettings((current) => ({ ...preferences.translationSettings, openRouterApiKey: current.openRouterApiKey }));
         setRecentSources(storedSources);
@@ -75,11 +77,11 @@ export default function Home() {
   useEffect(() => {
     if (!storageReady) return;
     const timer = window.setTimeout(() => {
-      void persistPreferences({ mergeOptions, showBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels } })
+      void persistPreferences({ mergeOptions, showBoundingBoxes, showRawBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels } })
         .catch((error) => toast.error("无法保存前端设置", { description: formatAppError(error) }));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [mergeOptions, showBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider]);
+  }, [mergeOptions, showBoundingBoxes, showRawBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider]);
 
   useEffect(() => () => {
     void releaseImages(imagesRef.current.map((image) => image.id));
@@ -96,8 +98,10 @@ export default function Home() {
       if (disposed || payload.requestId !== preloadRequestRef.current || annotations.current.has(payload.imageId)) return;
       const next = regionsToAnnotations(payload.regions);
       annotations.current.set(payload.imageId, next);
+      rawRegions.current.set(payload.imageId, payload.rawRegions);
       if (imagesRef.current[currentIndexRef.current]?.id === payload.imageId) {
         setCurrentAnnotations(next);
+        setCurrentRawRegions(payload.rawRegions);
       }
     }).then((dispose) => {
       if (disposed) dispose();
@@ -127,9 +131,11 @@ export default function Home() {
     const previous = imagesRef.current;
     imagesRef.current = registered;
     annotations.current.clear();
+    rawRegions.current.clear();
     setImages(registered);
     setCurrentIndex(0);
     setCurrentAnnotations(annotations.current.get(registered[0]?.id) ?? []);
+    setCurrentRawRegions([]);
     if (previous.length) {
       await releaseImages(previous.map((image) => image.id));
     }
@@ -148,8 +154,7 @@ export default function Home() {
   }, [updateRecentSources]);
 
   const imagePathsInFolder = useCallback(async (folder: string) => {
-    const entries = await readDir(folder);
-    return Promise.all(entries.filter((entry) => entry.isFile && isSupportedImage(entry.name)).map((entry) => join(folder, entry.name)));
+    return listImageFiles(folder);
   }, []);
 
   const openImages = useCallback(async () => {
@@ -199,6 +204,7 @@ export default function Home() {
     if (index < 0 || index >= images.length) return;
     setCurrentIndex(index);
     setCurrentAnnotations(annotations.current.get(images[index].id) ?? []);
+    setCurrentRawRegions(rawRegions.current.get(images[index].id) ?? []);
   }, [images]);
 
   const updateAnnotations = useCallback((next: IAnnotationType[]) => {
@@ -231,8 +237,10 @@ export default function Home() {
     }
     setPageProcessing(true);
     try {
-      const regions = await recognizePage(image.id, mergeOptions);
-      const next = regionsToAnnotations(regions);
+      const result = await recognizePage(image.id, mergeOptions);
+      const next = regionsToAnnotations(result.regions);
+      rawRegions.current.set(image.id, result.rawRegions);
+      setCurrentRawRegions(result.rawRegions);
       updateAnnotations(next);
       toast.success(`识别完成，共找到 ${next.length} 个文本区域`);
     } catch (error) {
@@ -310,7 +318,7 @@ export default function Home() {
       {images.length ? (
         <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
           <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} /></aside>
-          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} translationOverlayOptions={translationOverlayOptions} /></section>
+          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} rawRegions={currentRawRegions} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} showRawBoundingBoxes={showRawBoundingBoxes} translationOverlayOptions={translationOverlayOptions} /></section>
         </div>
       ) : (
         <section className="relative min-h-0 flex-1 overflow-y-auto p-8">
@@ -345,11 +353,14 @@ export default function Home() {
         onOptionsChange={setMergeOptions}
         showBoundingBoxes={showBoundingBoxes}
         onShowBoundingBoxesChange={setShowBoundingBoxes}
+        showRawBoundingBoxes={showRawBoundingBoxes}
+        onShowRawBoundingBoxesChange={setShowRawBoundingBoxes}
         onPreview={runPageOCR}
         canPreview={Boolean(images.length && modelStatus?.installed && !pageProcessing)}
         onReset={() => {
           setMergeOptions({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
           setShowBoundingBoxes(DEFAULT_APP_PREFERENCES.showBoundingBoxes);
+          setShowRawBoundingBoxes(DEFAULT_APP_PREFERENCES.showRawBoundingBoxes);
         }}
       />
       <TranslationOverlaySettings
