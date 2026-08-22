@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LoaderCircle } from "lucide-react";
+import { Eye, EyeOff, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { listOpenRouterModels, type OpenRouterComparisonResult, type OpenRouterModel } from "@/features/translation/providers/openrouter";
@@ -23,6 +23,7 @@ export function TranslationProviderSettings({ open, onOpenChange, settings, onSe
   const [models, setModels] = useState<OpenRouterModel[]>([]);
   const [modelsLoading, setModelsLoading] = useState(false);
   const [modelsError, setModelsError] = useState("");
+  const [showApiKey, setShowApiKey] = useState(false);
   const update = (patch: Partial<TranslationSettings>) => onSettingsChange({ ...settings, ...patch });
 
   const compare = async () => {
@@ -58,7 +59,7 @@ export function TranslationProviderSettings({ open, onOpenChange, settings, onSe
             <label className="grid gap-1.5 text-xs"><span>不使用代理（逗号分隔）</span><input className={fieldClass} spellCheck={false} placeholder="localhost,127.0.0.1" value={settings.proxyNoProxy} onChange={(event) => update({ proxyNoProxy: event.target.value })} /></label>
           </div>
           <label className="grid gap-1.5 text-xs"><span>当前服务</span><select className={fieldClass} value={settings.provider} onChange={(event) => update({ provider: event.target.value as TranslationProvider })}><option value="microsoft-edge">Microsoft Edge（无需密钥）</option><option value="openrouter">OpenRouter</option></select></label>
-          <label className="grid gap-1.5 text-xs"><span>OpenRouter API Key</span><input className={fieldClass} type="password" autoComplete="off" placeholder="sk-or-v1-…" value={settings.openRouterApiKey} onChange={(event) => update({ openRouterApiKey: event.target.value })} /></label>
+          <label className="grid gap-1.5 text-xs"><span>OpenRouter API Key</span><span className="relative"><input className={`${fieldClass} w-full pr-10`} type={showApiKey ? "text" : "password"} autoComplete="off" placeholder="sk-or-v1-…" value={settings.openRouterApiKey} onChange={(event) => update({ openRouterApiKey: event.target.value })} /><Button type="button" variant="ghost" size="icon-xs" className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showApiKey ? "隐藏 API Key" : "显示 API Key"} aria-pressed={showApiKey} onClick={() => setShowApiKey((value) => !value)}>{showApiKey ? <EyeOff /> : <Eye />}</Button></span></label>
           <label className="grid gap-1.5 text-xs"><span className="flex items-center justify-between"><span>翻译模型</span><span className="text-muted-foreground">{modelsLoading ? "正在加载…" : models.length ? `${models.length} 个可用模型` : "可手动填写 ID"}</span></span><input className={fieldClass} list="openrouter-models" spellCheck={false} value={settings.openRouterModel} onChange={(event) => update({ openRouterModel: event.target.value })} /><datalist id="openrouter-models">{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</datalist>{modelsError ? <span className="text-destructive">{modelsError}</span> : null}</label>
           <label className="grid gap-1.5 text-xs"><span>对比模型（逗号或换行分隔）</span><textarea className="min-h-20 rounded-md border bg-background p-2 font-mono text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30" spellCheck={false} value={settings.comparisonModels} onChange={(event) => update({ comparisonModels: event.target.value })} /></label>
           {results.length ? <div className="grid gap-2 rounded-lg border p-3 text-xs">{results.map((result) => <div key={result.model} className="grid gap-1 border-b pb-2 last:border-0 last:pb-0"><div className="flex justify-between gap-3 font-mono"><span className="truncate">{result.model}</span><span className="shrink-0 text-muted-foreground">{result.durationMs} ms</span></div>{result.error ? <p className="text-destructive">{result.error}</p> : <p className="line-clamp-3 text-muted-foreground">{result.translations?.join(" / ")}</p>}</div>)}</div> : null}
