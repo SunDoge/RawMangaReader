@@ -4,6 +4,13 @@ version = "0.1.0"
 edition = "2024"
 publish = false
 
+[features]
+examples = []
+
+[[example]]
+name = "smoke"
+required-features = ["examples"]
+
 [dependencies]
 anyhow = "1"
 image = { workspace = true }
