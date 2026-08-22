@@ -69,7 +69,7 @@ struct ModelProgress {
     total_bytes: u64,
 }
 
-fn model_directory(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn model_directory(app: &AppHandle) -> Result<PathBuf, String> {
     app.path()
         .app_data_dir()
         .map(|path| path.join("models").join(MODEL_VERSION))
@@ -235,7 +235,7 @@ pub async fn remove_ocr_model(
     .map_err(|error| error.to_string())?
 }
 
-fn with_engine<T>(
+pub(crate) fn with_engine<T>(
     state: &OcrState,
     directory: &Path,
     operation: impl FnOnce(&OcrEngine) -> anyhow::Result<T>,
@@ -264,7 +264,26 @@ pub async fn recognize_page(
     image_id: String,
     merge_options: Option<ocr::VerticalMergeOptions>,
 ) -> Result<Vec<OcrRegion>, String> {
-    let merge_options = merge_options.unwrap_or_default();
+    let state = Arc::clone(state.inner());
+    let images = Arc::clone(images.inner());
+    let directory = model_directory(&app)?;
+    recognize_page_cached(
+        state,
+        images,
+        directory,
+        image_id,
+        merge_options.unwrap_or_default(),
+    )
+    .await
+}
+
+pub(crate) async fn recognize_page_cached(
+    state: Arc<OcrState>,
+    images: Arc<ImageStore>,
+    directory: PathBuf,
+    image_id: String,
+    merge_options: ocr::VerticalMergeOptions,
+) -> Result<Vec<OcrRegion>, String> {
     let ocr_cache = images.ocr_cache().clone();
     let fingerprint = images
         .fingerprint(&image_id)
@@ -282,11 +301,9 @@ pub async fn recognize_page(
         ocr_cache.remove(&cache_key);
     }
 
-    let state = Arc::clone(state.inner());
-    let images = Arc::clone(images.inner());
-    let directory = model_directory(&app)?;
+    let worker_images = Arc::clone(&images);
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let image = images
+        let image = worker_images
             .decoded(&image_id)
             .map_err(|error| error.to_string())?;
         with_engine(&state, &directory, |engine| {

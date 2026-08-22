@@ -47,6 +47,19 @@ export interface VerticalMergeOptions {
   maxGapWidthRatio: number;
 }
 
+export interface ImagePreloadRequest {
+  requestId: string;
+  imageIds: string[];
+  mergeOptions: VerticalMergeOptions;
+  recognize: boolean;
+}
+
+export interface PrefetchedOcr {
+  requestId: string;
+  imageId: string;
+  regions: OcrRegion[];
+}
+
 export const DEFAULT_VERTICAL_MERGE_OPTIONS: VerticalMergeOptions = {
   enabled: true,
   minAspectRatio: 1.2,
@@ -69,6 +82,9 @@ export const registerImages = (paths: string[]) =>
 
 export const releaseImages = (imageIds: string[]) =>
   invoke<void>("release_images", { imageIds });
+
+export const scheduleImagePreload = (request: ImagePreloadRequest) =>
+  invoke<void>("schedule_image_preload", { request });
 
 export const recognizePage = (
   imageId: string,

@@ -3,6 +3,7 @@ import { ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, 
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
+import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,12 +15,12 @@ import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
 import { OcrDebugSettings } from "@/components/ocr-debug-settings";
 import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
-import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, type OcrModelStatus, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
+import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
 import type { IAnnotationType } from "@/types/annotation";
-import { isSupportedImage, naturalSort } from "./utils";
+import { isSupportedImage, naturalSort, prioritizeImageIds } from "./utils";
 
 export default function Home() {
   const [images, setImages] = useState<RegisteredImage[]>([]);
@@ -36,6 +37,8 @@ export default function Home() {
   const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
+  const currentIndexRef = useRef(0);
+  const preloadRequestRef = useRef("");
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
 
   useEffect(() => {
@@ -47,6 +50,42 @@ export default function Home() {
   useEffect(() => () => {
     void releaseImages(imagesRef.current.map((image) => image.id));
   }, []);
+
+  useEffect(() => {
+    currentIndexRef.current = currentIndex;
+  }, [currentIndex]);
+
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    void listen<PrefetchedOcr>("ocr-prefetched", ({ payload }) => {
+      if (disposed || payload.requestId !== preloadRequestRef.current || annotations.current.has(payload.imageId)) return;
+      const next = regionsToAnnotations(payload.regions);
+      annotations.current.set(payload.imageId, next);
+      if (imagesRef.current[currentIndexRef.current]?.id === payload.imageId) {
+        setCurrentAnnotations(next);
+      }
+    }).then((dispose) => {
+      if (disposed) dispose();
+      else unlisten = dispose;
+    });
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!images.length) return;
+    const requestId = crypto.randomUUID();
+    preloadRequestRef.current = requestId;
+    void scheduleImagePreload({
+      requestId,
+      imageIds: prioritizeImageIds(images.map((image) => image.id), currentIndex),
+      mergeOptions,
+      recognize: Boolean(modelStatus?.installed),
+    }).catch((error) => toast.error("无法调度图片预识别", { description: String(error) }));
+  }, [currentIndex, images, mergeOptions, modelStatus?.installed]);
 
   const loadImages = useCallback(async (paths: string[]) => {
     const sorted = [...paths].sort(naturalSort);
