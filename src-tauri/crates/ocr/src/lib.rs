@@ -1,6 +1,6 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use image::imageops;
-use oar_ocr::prelude::{OAROCR, OAROCRBuilder, TextRegion};
+use oar_ocr::prelude::{OAROCRBuilder, TextRegion, OAROCR};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -84,6 +84,7 @@ impl OcrEngine {
             .iter()
             .filter_map(|region| normalized_region(region, width, height))
             .collect::<Vec<_>>();
+        regions = merge_vertical_regions(regions, width, height);
         sort_manga_regions(&mut regions);
         Ok(regions)
     }
@@ -182,6 +183,118 @@ fn validate_rect(rect: RelativeRect) -> Result<()> {
     Ok(())
 }
 
+fn merge_vertical_regions(
+    mut regions: Vec<OcrRegion>,
+    image_width: u32,
+    image_height: u32,
+) -> Vec<OcrRegion> {
+    if regions.len() < 2 {
+        return regions;
+    }
+
+    regions.sort_by(|a, b| {
+        let a_center_x = a.x + a.width / 2.0;
+        let b_center_x = b.x + b.width / 2.0;
+        b_center_x.total_cmp(&a_center_x).then(a.y.total_cmp(&b.y))
+    });
+
+    let mut merged = Vec::with_capacity(regions.len());
+    let mut consumed = vec![false; regions.len()];
+    for start in 0..regions.len() {
+        if consumed[start] {
+            continue;
+        }
+
+        let mut column = regions[start].clone();
+        consumed[start] = true;
+        if !is_vertical_region(&column, image_width, image_height) {
+            merged.push(column);
+            continue;
+        }
+
+        loop {
+            let next =
+                (0..regions.len())
+                    .filter(|&index| !consumed[index])
+                    .filter(|&index| {
+                        can_merge_vertical(&column, &regions[index], image_width, image_height)
+                    })
+                    .min_by(|&left, &right| {
+                        vertical_gap(&column, &regions[left], image_height)
+                            .total_cmp(&vertical_gap(&column, &regions[right], image_height))
+                    });
+            let Some(next) = next else { break };
+            column = merge_region_pair(column, &regions[next]);
+            consumed[next] = true;
+        }
+        merged.push(column);
+    }
+    merged
+}
+
+fn is_vertical_region(region: &OcrRegion, image_width: u32, image_height: u32) -> bool {
+    let width = region.width * image_width as f32;
+    let height = region.height * image_height as f32;
+    height >= width * 1.2
+}
+
+fn vertical_gap(upper: &OcrRegion, lower: &OcrRegion, image_height: u32) -> f32 {
+    (lower.y - (upper.y + upper.height)).max(0.0) * image_height as f32
+}
+
+fn can_merge_vertical(
+    upper: &OcrRegion,
+    lower: &OcrRegion,
+    image_width: u32,
+    image_height: u32,
+) -> bool {
+    if !is_vertical_region(lower, image_width, image_height) || lower.y < upper.y {
+        return false;
+    }
+
+    let left = upper.x.max(lower.x);
+    let right = (upper.x + upper.width).min(lower.x + lower.width);
+    let overlap = (right - left).max(0.0) * image_width as f32;
+    let upper_width = upper.width * image_width as f32;
+    let lower_width = lower.width * image_width as f32;
+    let overlap_ratio = overlap / upper_width.min(lower_width).max(1.0);
+    let center_distance =
+        ((upper.x + upper.width / 2.0) - (lower.x + lower.width / 2.0)).abs() * image_width as f32;
+    let aligned = overlap_ratio >= 0.5 || center_distance <= upper_width.min(lower_width) * 0.35;
+
+    let gap = vertical_gap(upper, lower, image_height);
+    let max_gap = upper_width.max(lower_width) * 1.5;
+    aligned && gap <= max_gap
+}
+
+fn merge_region_pair(upper: OcrRegion, lower: &OcrRegion) -> OcrRegion {
+    let left = upper.x.min(lower.x);
+    let top = upper.y.min(lower.y);
+    let right = (upper.x + upper.width).max(lower.x + lower.width);
+    let bottom = (upper.y + upper.height).max(lower.y + lower.height);
+    let upper_weight = upper.text.chars().count().max(1) as f32;
+    let lower_weight = lower.text.chars().count().max(1) as f32;
+
+    OcrRegion {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
+        polygon: vec![
+            OcrPoint { x: left, y: top },
+            OcrPoint { x: right, y: top },
+            OcrPoint {
+                x: right,
+                y: bottom,
+            },
+            OcrPoint { x: left, y: bottom },
+        ],
+        text: format!("{}{}", upper.text, lower.text),
+        confidence: (upper.confidence * upper_weight + lower.confidence * lower_weight)
+            / (upper_weight + lower_weight),
+    }
+}
+
 fn sort_manga_regions(regions: &mut [OcrRegion]) {
     regions.sort_by(|a, b| {
         let a_center_x = a.x + a.width / 2.0;
@@ -216,9 +329,27 @@ mod tests {
 
     #[test]
     fn validates_relative_regions() {
-        assert!(validate_rect(RelativeRect { x: 0.1, y: 0.2, width: 0.3, height: 0.4 }).is_ok());
-        assert!(validate_rect(RelativeRect { x: 0.9, y: 0.2, width: 0.2, height: 0.4 }).is_err());
-        assert!(validate_rect(RelativeRect { x: 0.1, y: 0.2, width: 0.0, height: 0.4 }).is_err());
+        assert!(validate_rect(RelativeRect {
+            x: 0.1,
+            y: 0.2,
+            width: 0.3,
+            height: 0.4
+        })
+        .is_ok());
+        assert!(validate_rect(RelativeRect {
+            x: 0.9,
+            y: 0.2,
+            width: 0.2,
+            height: 0.4
+        })
+        .is_err());
+        assert!(validate_rect(RelativeRect {
+            x: 0.1,
+            y: 0.2,
+            width: 0.0,
+            height: 0.4
+        })
+        .is_err());
     }
 
     #[test]
@@ -245,5 +376,60 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["right-top", "right-bottom", "left"]
         );
+    }
+
+    fn region(x: f32, y: f32, width: f32, height: f32, text: &str) -> OcrRegion {
+        OcrRegion {
+            x,
+            y,
+            width,
+            height,
+            polygon: Vec::new(),
+            text: text.to_owned(),
+            confidence: 0.9,
+        }
+    }
+
+    #[test]
+    fn merges_aligned_vertical_fragments_top_to_bottom() {
+        let regions = vec![
+            region(0.8, 0.28, 0.04, 0.12, "です"),
+            region(0.805, 0.1, 0.04, 0.14, "こんにちは"),
+        ];
+        let merged = merge_vertical_regions(regions, 1000, 1000);
+
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].text, "こんにちはです");
+        assert_eq!(merged[0].polygon.len(), 4);
+    }
+
+    #[test]
+    fn keeps_neighboring_columns_separate() {
+        let regions = vec![
+            region(0.8, 0.1, 0.04, 0.15, "右"),
+            region(0.74, 0.27, 0.04, 0.15, "左"),
+        ];
+
+        assert_eq!(merge_vertical_regions(regions, 1000, 1000).len(), 2);
+    }
+
+    #[test]
+    fn keeps_distant_vertical_fragments_separate() {
+        let regions = vec![
+            region(0.8, 0.1, 0.04, 0.1, "上"),
+            region(0.8, 0.4, 0.04, 0.1, "下"),
+        ];
+
+        assert_eq!(merge_vertical_regions(regions, 1000, 1000).len(), 2);
+    }
+
+    #[test]
+    fn does_not_merge_horizontal_lines() {
+        let regions = vec![
+            region(0.2, 0.1, 0.2, 0.04, "first"),
+            region(0.2, 0.15, 0.2, 0.04, "second"),
+        ];
+
+        assert_eq!(merge_vertical_regions(regions, 1000, 1000).len(), 2);
     }
 }
