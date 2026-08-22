@@ -19,14 +19,19 @@ export const DEFAULT_HTTP_PROXY_SETTINGS: HttpProxySettings = {
 let currentSettings: HttpProxySettings = { ...DEFAULT_HTTP_PROXY_SETTINGS };
 
 export function configureHttpProxy(settings: HttpProxySettings): void {
-  currentSettings = { ...settings };
+  const normalized = nativeProxyArguments(settings);
+  currentSettings = { proxyEnabled: normalized.enabled, proxyUrl: normalized.url, proxyNoProxy: normalized.noProxy };
 }
 
-export const configureNativeHttpProxy = (settings: HttpProxySettings) => invoke<void>("set_http_proxy", {
-  enabled: settings.proxyEnabled,
-  url: settings.proxyUrl,
-  noProxy: settings.proxyNoProxy,
-});
+export function nativeProxyArguments(settings: Partial<HttpProxySettings>) {
+  return {
+    enabled: Boolean(settings.proxyEnabled),
+    url: typeof settings.proxyUrl === "string" ? settings.proxyUrl : DEFAULT_HTTP_PROXY_SETTINGS.proxyUrl,
+    noProxy: typeof settings.proxyNoProxy === "string" ? settings.proxyNoProxy : DEFAULT_HTTP_PROXY_SETTINGS.proxyNoProxy,
+  };
+}
+
+export const configureNativeHttpProxy = (settings: HttpProxySettings) => invoke<void>("set_http_proxy", nativeProxyArguments(settings));
 
 export function proxyClientOptions(settings: HttpProxySettings): ClientOptions {
   if (!settings.proxyEnabled) return {};

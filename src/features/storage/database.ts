@@ -53,11 +53,24 @@ export class RawMangaReaderDatabase extends Dexie {
 
 export const appDatabase = new RawMangaReaderDatabase();
 
+export function normalizePreferences(value: Partial<AppPreferences> = {}): AppPreferences {
+  return {
+    ...DEFAULT_APP_PREFERENCES,
+    ...value,
+    mergeOptions: { ...DEFAULT_APP_PREFERENCES.mergeOptions, ...value.mergeOptions },
+    translationOverlayOptions: { ...DEFAULT_APP_PREFERENCES.translationOverlayOptions, ...value.translationOverlayOptions },
+    translationSettings: { ...DEFAULT_APP_PREFERENCES.translationSettings, ...value.translationSettings },
+  };
+}
+
 export async function initializeFrontendStorage(database = appDatabase): Promise<{ preferences: AppPreferences; recentSources: RecentSource[] }> {
   return database.transaction("rw", database.settings, database.recentSources, async () => {
     let settings = await database.settings.get("app");
     if (!settings) {
       settings = { key: "app", value: structuredClone(DEFAULT_APP_PREFERENCES), updatedAt: Date.now() };
+      await database.settings.put(settings);
+    } else {
+      settings.value = normalizePreferences(settings.value);
       await database.settings.put(settings);
     }
     const recentSources = await database.recentSources.orderBy("openedAt").reverse().limit(12).toArray();
