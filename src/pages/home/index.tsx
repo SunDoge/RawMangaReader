@@ -43,7 +43,7 @@ export default function Home() {
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>(initialPreferences.mergeOptions);
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(initialPreferences.showBoundingBoxes);
   const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>(initialPreferences.translationOverlayOptions);
-  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...initialPreferences.translationSettings, openRouterApiKey: "" });
+  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...initialPreferences.translationSettings, openRouterApiKey: import.meta.env.DEV ? (import.meta.env.VITE_OPENROUTER_API_KEY ?? "") : "" });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
   const currentIndexRef = useRef(0);
@@ -278,6 +278,8 @@ export default function Home() {
         onOptionsChange={setMergeOptions}
         showBoundingBoxes={showBoundingBoxes}
         onShowBoundingBoxesChange={setShowBoundingBoxes}
+        onPreview={runPageOCR}
+        canPreview={Boolean(images.length && modelStatus?.installed && !pageProcessing)}
         onReset={() => {
           setMergeOptions({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
           setShowBoundingBoxes(DEFAULT_APP_PREFERENCES.showBoundingBoxes);

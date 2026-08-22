@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { VerticalMergeOptions } from "@/features/ocr/api";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,6 +17,8 @@ interface OcrDebugSettingsProps {
   onOptionsChange: (options: VerticalMergeOptions) => void;
   showBoundingBoxes: boolean;
   onShowBoundingBoxesChange: (show: boolean) => void;
+  onPreview: () => Promise<void>;
+  canPreview: boolean;
   onReset: () => void;
 }
 
@@ -55,8 +58,11 @@ export function OcrDebugSettings({
   onOptionsChange,
   showBoundingBoxes,
   onShowBoundingBoxesChange,
+  onPreview,
+  canPreview,
   onReset,
 }: OcrDebugSettingsProps) {
+  const [previewing, setPreviewing] = useState(false);
   const update = (patch: Partial<VerticalMergeOptions>) =>
     onOptionsChange({ ...options, ...patch });
 
@@ -87,14 +93,22 @@ export function OcrDebugSettings({
               onChange={(event) => onShowBoundingBoxesChange(event.target.checked)}
             />
           </label>
+          <label className="flex items-center justify-between rounded-lg border p-3 text-xs">
+            <span>合并同一段中的相邻竖排列</span>
+            <input className="size-4 accent-primary" type="checkbox" checked={options.mergeAdjacentColumns} onChange={(event) => update({ mergeAdjacentColumns: event.target.checked })} />
+          </label>
+          <RangeField label="过滤短边小于此值的文字框（px，0 为关闭）" value={options.minTextSizePx} min={0} max={64} step={1} onChange={(value) => update({ minTextSizePx: value })} />
           <RangeField label="最小竖排长宽比" value={options.minAspectRatio} min={1} max={3} step={0.05} onChange={(value) => update({ minAspectRatio: value })} />
           <RangeField label="最小水平重叠比例" value={options.minOverlapRatio} min={0} max={1} step={0.05} onChange={(value) => update({ minOverlapRatio: value })} />
           <RangeField label="最大中心偏移 / 字宽" value={options.maxCenterOffsetRatio} min={0} max={1} step={0.05} onChange={(value) => update({ maxCenterOffsetRatio: value })} />
           <RangeField label="最大垂直间距 / 字宽" value={options.maxGapWidthRatio} min={0} max={4} step={0.1} onChange={(value) => update({ maxGapWidthRatio: value })} />
+          <RangeField label="相邻列最小垂直重叠" value={options.minColumnOverlapRatio} min={0.3} max={1} step={0.05} onChange={(value) => update({ minColumnOverlapRatio: value })} />
+          <RangeField label="相邻列最大水平间距 / 字宽" value={options.maxColumnGapWidthRatio} min={0} max={2} step={0.1} onChange={(value) => update({ maxColumnGapWidthRatio: value })} />
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onReset}>恢复默认值</Button>
+          <Button variant="outline" disabled={!canPreview || previewing} onClick={() => { setPreviewing(true); void onPreview().finally(() => setPreviewing(false)); }}>{previewing ? "识别中…" : "重新识别并预览"}</Button>
           <Button onClick={() => onOpenChange(false)}>完成</Button>
         </DialogFooter>
       </DialogContent>

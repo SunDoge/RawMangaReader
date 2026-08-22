@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { compareOpenRouterModels, parseTranslationArray, translateWithOpenRouter, type OpenRouterHttpTransport } from "./openrouter";
+import { compareOpenRouterModels, listOpenRouterModels, parseTranslationArray, translateWithOpenRouter, type OpenRouterHttpTransport } from "./openrouter";
 
 function completion(content: string, model = "test/model") {
   return { id: "id", object: "chat.completion", created: 1, model, choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }], usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 } };
@@ -12,7 +12,7 @@ describe("OpenRouter translation provider", () => {
     const [url, init] = transport.mock.calls[0];
     expect(String(url)).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-key");
-    expect(JSON.parse(String(init?.body))).toMatchObject({ model: "test/model", temperature: 0 });
+    expect(JSON.parse(String(init?.body))).toMatchObject({ model: "test/model", temperature: 0, messages: [{ role: "user" }] });
   });
 
   it("accepts fenced JSON and rejects incomplete batches", () => {
@@ -36,5 +36,16 @@ describe("OpenRouter translation provider", () => {
     const transport = vi.fn<OpenRouterHttpTransport>();
     await expect(translateWithOpenRouter([], { apiKey: "", model: "", transport })).resolves.toEqual([]);
     expect(transport).not.toHaveBeenCalled();
+  });
+
+  it("reports the actual OpenRouter API error", async () => {
+    const transport = vi.fn<OpenRouterHttpTransport>(async () => Response.json({ error: { message: "model is unavailable" } }, { status: 404 }));
+    await expect(translateWithOpenRouter(["text"], { apiKey: "key", model: "missing", transport })).rejects.toThrow("(404): model is unavailable");
+  });
+
+  it("loads and normalizes the authenticated model list", async () => {
+    const transport = vi.fn<OpenRouterHttpTransport>(async () => Response.json({ data: [{ id: "z/model", name: "Zulu", context_length: 1000 }, { id: "a/model", name: "Alpha" }] }));
+    await expect(listOpenRouterModels("key", transport)).resolves.toEqual([{ id: "a/model", name: "Alpha", contextLength: undefined }, { id: "z/model", name: "Zulu", contextLength: 1000 }]);
+    expect(new Headers(transport.mock.calls[0][1]?.headers).get("authorization")).toBe("Bearer key");
   });
 });

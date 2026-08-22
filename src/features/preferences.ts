@@ -31,11 +31,15 @@ export function loadPreferences(storage: PreferencesStorage): AppPreferences {
   try {
     const stored = JSON.parse(storage.getItem(STORAGE_KEY) ?? "null") as Partial<AppPreferences> | null;
     if (!stored || typeof stored !== "object") return structuredClone(DEFAULT_APP_PREFERENCES);
+    const translationSettings = { ...DEFAULT_APP_PREFERENCES.translationSettings, ...stored.translationSettings };
+    if (translationSettings.openRouterModel === "google/gemini-2.5-flash") {
+      translationSettings.openRouterModel = DEFAULT_APP_PREFERENCES.translationSettings.openRouterModel;
+    }
     return {
       mergeOptions: { ...DEFAULT_APP_PREFERENCES.mergeOptions, ...stored.mergeOptions },
       showBoundingBoxes: typeof stored.showBoundingBoxes === "boolean" ? stored.showBoundingBoxes : DEFAULT_APP_PREFERENCES.showBoundingBoxes,
       translationOverlayOptions: { ...DEFAULT_APP_PREFERENCES.translationOverlayOptions, ...stored.translationOverlayOptions },
-      translationSettings: { ...DEFAULT_APP_PREFERENCES.translationSettings, ...stored.translationSettings },
+      translationSettings,
     };
   } catch {
     return structuredClone(DEFAULT_APP_PREFERENCES);
