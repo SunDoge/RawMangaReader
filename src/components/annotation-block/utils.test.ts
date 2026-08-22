@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAnnotation, isUsableAnnotation, transformAnnotation } from "./utils";
+import { createAnnotation, isUsableAnnotation, mergeAnnotations, transformAnnotation } from "./utils";
 
 describe("createAnnotation", () => {
   it("normalizes a drag from bottom-right to top-left", () => {
@@ -38,5 +38,21 @@ describe("isUsableAnnotation", () => {
   it("rejects accidental clicks and accepts visible regions", () => {
     expect(isUsableAnnotation(createAnnotation({ x: 0.1, y: 0.1 }, { x: 0.105, y: 0.5 }, "tiny"))).toBe(false);
     expect(isUsableAnnotation(createAnnotation({ x: 0.1, y: 0.1 }, { x: 0.4, y: 0.5 }, "valid"))).toBe(true);
+  });
+});
+
+describe("mergeAnnotations", () => {
+  it("creates a union bbox and concatenates vertical OCR text", () => {
+    const first = { ...createAnnotation({ x: 0.7, y: 0.1 }, { x: 0.8, y: 0.4 }, "a"), ocr: "右" };
+    const second = { ...createAnnotation({ x: 0.6, y: 0.2 }, { x: 0.7, y: 0.6 }, "b"), ocr: "左" };
+    const merged = mergeAnnotations([first, second]);
+    expect(merged).toMatchObject({ id: "a", x: 0.6, y: 0.1, height: 0.5, ocr: "右左", status: "finished" });
+    expect(merged?.width).toBeCloseTo(0.2);
+  });
+
+  it("does not silently combine multiple existing translations", () => {
+    const first = { ...createAnnotation({ x: 0.1, y: 0.1 }, { x: 0.3, y: 0.2 }, "a"), translation: "一" };
+    const second = { ...createAnnotation({ x: 0.4, y: 0.1 }, { x: 0.6, y: 0.2 }, "b"), translation: "二" };
+    expect(mergeAnnotations([first, second])?.translation).toBeUndefined();
   });
 });

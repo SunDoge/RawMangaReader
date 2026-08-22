@@ -42,3 +42,28 @@ export function transformAnnotation(annotation: IAnnotationType, start: Relative
   if (transform.includes("s")) bottom = Math.max(top + minimumSize, Math.min(1, bottom + dy));
   return { ...annotation, x: left, y: top, width: right - left, height: bottom - top, polygon: undefined };
 }
+
+export function mergeAnnotations(annotations: IAnnotationType[]): IAnnotationType | null {
+  if (annotations.length < 2) return null;
+  const left = Math.min(...annotations.map((item) => item.x));
+  const top = Math.min(...annotations.map((item) => item.y));
+  const right = Math.max(...annotations.map((item) => item.x + item.width));
+  const bottom = Math.max(...annotations.map((item) => item.y + item.height));
+  const texts = annotations.map((item) => item.ocr?.trim()).filter((text): text is string => Boolean(text));
+  const translations = annotations.map((item) => item.translation?.trim()).filter((text): text is string => Boolean(text));
+  const vertical = bottom - top > (right - left) * 1.35;
+
+  return {
+    ...annotations[0],
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+    polygon: undefined,
+    ocr: texts.join(vertical ? "" : "\n"),
+    translation: translations.length === 1 ? translations[0] : undefined,
+    confidence: undefined,
+    status: texts.length ? "finished" : "unprocessed",
+    error: false,
+  };
+}
