@@ -1,13 +1,12 @@
 import React, { useCallback, useRef, useState } from "react";
 import classNames from "classnames";
-import { invoke } from "@tauri-apps/api/core";
 import { Button, Dropdown, Empty, MenuProps, message } from "antd";
 import style from "./style.module.less";
 import { IAnnotationType } from "@/types/annotation";
 import ThumbnailList from "@/components/thumbnail-list";
 import { AnnotationBlock } from "@/components/annotation-block";
-import { pick, zip } from "lodash";
-import { getErrorMessage, getVocabPath, naturalSort } from "./utils";
+import { zip } from "lodash";
+import { naturalSort } from "./utils";
 import {
   FileImageOutlined,
   FolderOpenOutlined,
@@ -15,7 +14,6 @@ import {
   UploadOutlined,
 } from "@ant-design/icons";
 import { About } from "@/components/about";
-import { trackEvent } from "@aptabase/tauri";
 import { areAreasEqual } from "@/utils";
 import * as dialog from "@tauri-apps/plugin-dialog";
 import * as fs from "@tauri-apps/plugin-fs";
@@ -23,8 +21,6 @@ import * as fs from "@tauri-apps/plugin-fs";
 interface IProps {}
 
 export const Home: React.FC<IProps> = (_props) => {
-  const [modelLoaded, setModelLoaded] = useState<boolean>(false);
-  const [modelLoading, setModelLoading] = useState<boolean>(false);
   const [imageList, setImageList] = useState<string[]>([]);
   const [currentSelected, setCurrentSelected] = useState<number>(NaN);
   const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
@@ -70,47 +66,6 @@ export const Home: React.FC<IProps> = (_props) => {
     setCurrentSelected(0);
   }, []);
 
-  const openModel = useCallback(async () => {
-    const selected = await dialog.open({
-      multiple: false,
-      defaultPath:
-        localStorage.getItem("defaults.lastUsedModelPath") || undefined,
-      filters: [
-        {
-          name: "model file",
-          extensions: ["bin", "onnx"],
-        },
-      ],
-    });
-    if (selected === null) {
-      return;
-    } else if (Array.isArray(selected)) {
-      return;
-    }
-
-    setModelLoading(true);
-    try {
-      await invoke("model_new", {
-        modelPath: selected,
-        vocabPath: await getVocabPath(),
-      });
-      // 保存上次使用的 model path
-      localStorage.setItem("defaults.lastUsedModelPath", selected);
-      messageApi.success("模型加载成功");
-      setModelLoaded(true);
-    } catch (error) {
-      messageApi.error("模型加载失败");
-      trackEvent("open_model", {
-        status: "failed",
-        error: getErrorMessage(error),
-      });
-      setModelLoaded(false);
-    } finally {
-      setModelLoading(false);
-    }
-    setModelLoaded(true);
-  }, []);
-
   const handleAnnotationListChange = useCallback(
     (list: IAnnotationType[]) => {
       setCurrentAnnotationList(list);
@@ -149,29 +104,14 @@ export const Home: React.FC<IProps> = (_props) => {
   const handleOCRProcess = useCallback(
     async (annotation: IAnnotationType) => {
       const curImagePath = imageList[currentSelected];
-      if (!modelLoaded) {
-        throw new Error(`MODEL_ERROR`);
-      }
-      if (annotation.unit === "%") {
-        console.log(annotation);
-        const bbox = pick(annotation, "x", "y", "width", "height");
-        try {
-          const result = await invoke("model_infer", {
-            path: curImagePath,
-            bbox,
-          });
-          return result as any;
-        } catch (e) {
-          trackEvent("model_infer", {
-            status: "failed",
-            error: getErrorMessage(e),
-          });
-          console.log(e);
-        }
-      }
-      return null as any;
+      console.debug("OCR is disabled during the Tauri 2 migration", {
+        annotation,
+        curImagePath,
+      });
+      messageApi.info("OCR 暂时不可用，正在进行整体重构");
+      return {};
     },
-    [modelLoaded, imageList, currentSelected],
+    [imageList, currentSelected, messageApi],
   );
 
   const handleImageSelected = useCallback(
@@ -199,11 +139,9 @@ export const Home: React.FC<IProps> = (_props) => {
           type="primary"
           size="small"
           icon={<UploadOutlined />}
-          onClick={openModel}
-          loading={modelLoading}
-          danger={modelLoaded}
+          disabled
         >
-          {modelLoaded ? "更换模型" : "加载模型"}
+          OCR 重构中
         </Button>
         <Button
           type="primary"

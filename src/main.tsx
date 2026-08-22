@@ -3,13 +3,15 @@ import ReactDOM from "react-dom/client";
 
 import App from "./App";
 import "./styles.css";
-import { attachConsole, info } from "tauri-plugin-log-api";
+import { attachConsole, info } from "@tauri-apps/plugin-log";
 
-attachConsole().then(() => {
-  info("attached");
-}).catch((e) => {
-  console.log("fail to attach", e);
-})
+attachConsole()
+  .then(() => {
+    info("attached");
+  })
+  .catch((e: unknown) => {
+    console.log("fail to attach", e);
+  });
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
