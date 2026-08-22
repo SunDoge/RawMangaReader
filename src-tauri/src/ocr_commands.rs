@@ -1,3 +1,4 @@
+use crate::image_store::{ocr_cache_key, ImageStore, RegisteredImage};
 use ocr::{
     OcrEngine, OcrRegion, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY, DETECTION_MODEL,
     MODEL_VERSION, RECOGNITION_MODEL,
@@ -259,17 +260,63 @@ fn with_engine<T>(
 pub async fn recognize_page(
     app: AppHandle,
     state: State<'_, Arc<OcrState>>,
-    image_path: String,
+    images: State<'_, Arc<ImageStore>>,
+    image_id: String,
     merge_options: Option<ocr::VerticalMergeOptions>,
 ) -> Result<Vec<OcrRegion>, String> {
+    let merge_options = merge_options.unwrap_or_default();
+    let ocr_cache = images.ocr_cache().clone();
+    let fingerprint = images
+        .fingerprint(&image_id)
+        .map_err(|error| error.to_string())?;
+    let cache_key = ocr_cache_key(&fingerprint, MODEL_VERSION, &merge_options)
+        .map_err(|error| error.to_string())?;
+    if let Some(entry) = ocr_cache
+        .get(&cache_key)
+        .await
+        .map_err(|error| error.to_string())?
+    {
+        if let Ok(cached) = serde_json::from_slice(&entry) {
+            return Ok(cached);
+        }
+        ocr_cache.remove(&cache_key);
+    }
+
     let state = Arc::clone(state.inner());
+    let images = Arc::clone(images.inner());
+    let directory = model_directory(&app)?;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let image = images
+            .decoded(&image_id)
+            .map_err(|error| error.to_string())?;
+        with_engine(&state, &directory, |engine| {
+            engine.recognize_page_image(&image, merge_options)
+        })
+    })
+    .await
+    .map_err(|error| error.to_string())??;
+    let encoded = serde_json::to_vec(&result).map_err(|error| error.to_string())?;
+    ocr_cache.insert(cache_key, encoded);
+    Ok(result)
+}
+
+#[tauri::command]
+pub async fn recognize_region(
+    app: AppHandle,
+    state: State<'_, Arc<OcrState>>,
+    images: State<'_, Arc<ImageStore>>,
+    image_id: String,
+    rect: RelativeRect,
+) -> Result<RegionRecognition, String> {
+    let state = Arc::clone(state.inner());
+    let images = Arc::clone(images.inner());
     let directory = model_directory(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let image = images
+            .decoded(&image_id)
+            .map_err(|error| error.to_string())?;
         with_engine(&state, &directory, |engine| {
-            engine.recognize_page_with_options(
-                Path::new(&image_path),
-                merge_options.unwrap_or_default(),
-            )
+            engine.recognize_region_image(&image, rect)
         })
     })
     .await
@@ -277,21 +324,23 @@ pub async fn recognize_page(
 }
 
 #[tauri::command]
-pub async fn recognize_region(
-    app: AppHandle,
-    state: State<'_, Arc<OcrState>>,
-    image_path: String,
-    rect: RelativeRect,
-) -> Result<RegionRecognition, String> {
-    let state = Arc::clone(state.inner());
-    let directory = model_directory(&app)?;
-    tauri::async_runtime::spawn_blocking(move || {
-        with_engine(&state, &directory, |engine| {
-            engine.recognize_region(Path::new(&image_path), rect)
-        })
-    })
-    .await
-    .map_err(|error| error.to_string())?
+pub fn register_images(
+    images: State<'_, Arc<ImageStore>>,
+    paths: Vec<String>,
+) -> Result<Vec<RegisteredImage>, String> {
+    images
+        .register_paths(paths)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn release_images(
+    images: State<'_, Arc<ImageStore>>,
+    image_ids: Vec<String>,
+) -> Result<(), String> {
+    images
+        .release(&image_ids)
+        .map_err(|error| error.to_string())
 }
 
 #[cfg(test)]

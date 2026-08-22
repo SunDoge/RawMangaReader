@@ -34,6 +34,11 @@ export interface OcrModelProgress {
   totalBytes: number;
 }
 
+export interface RegisteredImage {
+  id: string;
+  path: string;
+}
+
 export interface VerticalMergeOptions {
   enabled: boolean;
   minAspectRatio: number;
@@ -59,12 +64,18 @@ export const downloadOcrModel = () =>
 export const removeOcrModel = () =>
   invoke<OcrModelStatus>("remove_ocr_model");
 
+export const registerImages = (paths: string[]) =>
+  invoke<RegisteredImage[]>("register_images", { paths });
+
+export const releaseImages = (imageIds: string[]) =>
+  invoke<void>("release_images", { imageIds });
+
 export const recognizePage = (
-  imagePath: string,
+  imageId: string,
   mergeOptions: VerticalMergeOptions = DEFAULT_VERTICAL_MERGE_OPTIONS,
-) => invoke<OcrRegion[]>("recognize_page", { imagePath, mergeOptions });
+) => invoke<OcrRegion[]>("recognize_page", { imageId, mergeOptions });
 
 export const recognizeRegion = (
-  imagePath: string,
+  imageId: string,
   rect: Pick<OcrRegion, "x" | "y" | "width" | "height">,
-) => invoke<RegionRecognition>("recognize_region", { imagePath, rect });
+) => invoke<RegionRecognition>("recognize_region", { imageId, rect });

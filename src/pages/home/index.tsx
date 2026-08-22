@@ -13,14 +13,14 @@ import { ThumbnailList } from "@/components/thumbnail-list";
 import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
 import { OcrDebugSettings } from "@/components/ocr-debug-settings";
-import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, type OcrModelStatus, type VerticalMergeOptions } from "@/features/ocr/api";
+import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, type OcrModelStatus, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort } from "./utils";
 
 export default function Home() {
-  const [images, setImages] = useState<string[]>([]);
+  const [images, setImages] = useState<RegisteredImage[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
@@ -31,6 +31,7 @@ export default function Home() {
   const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
   const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const annotations = useRef(new Map<string, IAnnotationType[]>());
+  const imagesRef = useRef<RegisteredImage[]>([]);
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
 
   useEffect(() => {
@@ -39,17 +40,32 @@ export default function Home() {
       .catch((error) => toast.error("无法读取 OCR 模型状态", { description: String(error) }));
   }, []);
 
-  const loadImages = useCallback((paths: string[]) => {
+  useEffect(() => () => {
+    void releaseImages(imagesRef.current.map((image) => image.id));
+  }, []);
+
+  const loadImages = useCallback(async (paths: string[]) => {
     const sorted = [...paths].sort(naturalSort);
-    setImages(sorted);
+    const registered = await registerImages(sorted);
+    const previous = imagesRef.current;
+    imagesRef.current = registered;
+    annotations.current.clear();
+    setImages(registered);
     setCurrentIndex(0);
-    setCurrentAnnotations(annotations.current.get(sorted[0]) ?? []);
+    setCurrentAnnotations(annotations.current.get(registered[0]?.id) ?? []);
+    if (previous.length) {
+      await releaseImages(previous.map((image) => image.id));
+    }
   }, []);
 
   const openImages = useCallback(async () => {
     const selected = await open({ multiple: true, filters: [{ name: "图片", extensions: ["jpg", "jpeg", "png", "webp", "bmp", "gif", "avif"] }] });
     if (!selected) return;
-    loadImages(Array.isArray(selected) ? selected : [selected]);
+    try {
+      await loadImages(Array.isArray(selected) ? selected : [selected]);
+    } catch (error) {
+      toast.error("无法注册图片资源", { description: String(error) });
+    }
   }, [loadImages]);
 
   const openFolder = useCallback(async () => {
@@ -61,18 +77,22 @@ export default function Home() {
       toast.error("这个文件夹里没有支持的图片");
       return;
     }
-    loadImages(paths);
+    try {
+      await loadImages(paths);
+    } catch (error) {
+      toast.error("无法注册图片资源", { description: String(error) });
+    }
   }, [loadImages]);
 
   const selectImage = useCallback((index: number) => {
     if (index < 0 || index >= images.length) return;
     setCurrentIndex(index);
-    setCurrentAnnotations(annotations.current.get(images[index]) ?? []);
+    setCurrentAnnotations(annotations.current.get(images[index].id) ?? []);
   }, [images]);
 
   const updateAnnotations = useCallback((next: IAnnotationType[]) => {
     setCurrentAnnotations(next);
-    annotations.current.set(images[currentIndex], next);
+    annotations.current.set(images[currentIndex].id, next);
   }, [currentIndex, images]);
 
   const runOCR = useCallback(async (annotation: IAnnotationType) => {
@@ -80,7 +100,7 @@ export default function Home() {
       setModelManagerOpen(true);
       throw new Error("OCR 模型尚未安装");
     }
-    const result = await recognizeRegion(images[currentIndex], annotation);
+    const result = await recognizeRegion(images[currentIndex].id, annotation);
     return { ocr: result.text, confidence: result.confidence, error: false };
   }, [currentIndex, images, modelStatus?.installed]);
 
@@ -89,8 +109,8 @@ export default function Home() {
       setModelManagerOpen(true);
       return;
     }
-    const imagePath = images[currentIndex];
-    if (!imagePath || pageProcessing) return;
+    const image = images[currentIndex];
+    if (!image || pageProcessing) return;
     if (currentAnnotations.length) {
       const confirmed = await ask("整页 OCR 会替换当前页面的识别区域和人工修改，是否继续？", {
         title: "重新识别当前页面",
@@ -100,7 +120,7 @@ export default function Home() {
     }
     setPageProcessing(true);
     try {
-      const regions = await recognizePage(imagePath, mergeOptions);
+      const regions = await recognizePage(image.id, mergeOptions);
       const next = regionsToAnnotations(regions);
       updateAnnotations(next);
       toast.success(`识别完成，共找到 ${next.length} 个文本区域`);
@@ -167,8 +187,8 @@ export default function Home() {
 
       {images.length ? (
         <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
-          <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images} currentIndex={currentIndex} onSelected={selectImage} /></aside>
-          <section className="min-h-0"><AnnotationBlock imageList={images} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} /></section>
+          <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} /></aside>
+          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} /></section>
         </div>
       ) : (
         <section className="relative grid min-h-0 flex-1 place-items-center overflow-hidden p-8">
