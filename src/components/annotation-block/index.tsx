@@ -7,6 +7,8 @@ import { cn } from "@/lib/utils";
 import type { IAnnotationType } from "@/types/annotation";
 import type { IThumbnailListProps } from "@/components/thumbnail-list";
 import { ResultList } from "@/components/result-list";
+import { FittedTranslation } from "@/components/fitted-translation";
+import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
 import { createAnnotation, isUsableAnnotation, type RelativePoint } from "./utils";
 
 interface AnnotationBlockProps extends IThumbnailListProps {
@@ -16,6 +18,7 @@ interface AnnotationBlockProps extends IThumbnailListProps {
   onTranslateAll?: () => void;
   translating?: boolean;
   showBoundingBoxes?: boolean;
+  translationOverlayOptions?: TranslationOverlayOptions;
 }
 
 export function AnnotationBlock({
@@ -28,6 +31,7 @@ export function AnnotationBlock({
   onTranslateAll,
   translating,
   showBoundingBoxes = true,
+  translationOverlayOptions = DEFAULT_TRANSLATION_OVERLAY_OPTIONS,
 }: AnnotationBlockProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const annotationListRef = useRef(annotationList);
@@ -124,23 +128,23 @@ export function AnnotationBlock({
                   className={cn(
                     "absolute flex items-center justify-center p-0.5 transition",
                     (showBoundingBoxes || annotation.id === draft?.id) && "border-2 border-primary bg-primary/10 hover:bg-primary/20",
-                    annotation.translation && "bg-background/95 hover:bg-background",
                     showBoundingBoxes && selected === index && "border-amber-400 ring-2 ring-black/40",
                   )}
-                  style={{ left: `${annotation.x * 100}%`, top: `${annotation.y * 100}%`, width: `${annotation.width * 100}%`, height: `${annotation.height * 100}%` }}
+                  style={{
+                    left: `${annotation.x * 100}%`,
+                    top: `${annotation.y * 100}%`,
+                    width: `${annotation.width * 100}%`,
+                    height: `${annotation.height * 100}%`,
+                    backgroundColor: annotation.translation && translationOverlayOptions.visible
+                      ? `color-mix(in srgb, var(--background) ${translationOverlayOptions.backgroundOpacity * 100}%, transparent)`
+                      : undefined,
+                  }}
                   onPointerDown={(event) => event.stopPropagation()}
                   onClick={() => setSelected(index)}
                   aria-label={`选择区域 ${index + 1}`}
                 >
                   {showBoundingBoxes ? <Badge className="absolute -top-6 left-0 h-5 rounded-sm bg-amber-500 px-1.5 text-[10px] text-black">{index + 1}</Badge> : null}
-                  {annotation.translation ? (
-                    <span
-                      className="line-clamp-[8] whitespace-pre-wrap break-words text-center font-medium leading-tight text-foreground"
-                      style={{ fontSize: "clamp(10px, 1.25vw, 18px)" }}
-                    >
-                      {annotation.translation}
-                    </span>
-                  ) : null}
+                  {annotation.translation && translationOverlayOptions.visible ? <FittedTranslation text={annotation.translation} options={translationOverlayOptions} /> : null}
                 </button>
               ))}
             </div>
