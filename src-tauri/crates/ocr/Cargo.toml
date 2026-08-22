@@ -1,0 +1,11 @@
+[package]
+name = "ocr"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+oar-ocr = "0.9.2"
+
+[build-dependencies]
+openssl-sys = { version = "0.9", features = ["vendored"] }
