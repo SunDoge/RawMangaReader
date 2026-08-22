@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import type { OpenRouterComparisonResult } from "@/features/translation/providers/openrouter";
+import { listOpenRouterModels, type OpenRouterComparisonResult, type OpenRouterModel } from "@/features/translation/providers/openrouter";
+import { formatAppError } from "@/features/preferences";
 import type { TranslationProvider, TranslationSettings } from "@/features/translation/settings";
 
 interface TranslationProviderSettingsProps {
@@ -19,12 +20,29 @@ const fieldClass = "h-9 rounded-md border bg-background px-2 text-sm outline-non
 export function TranslationProviderSettings({ open, onOpenChange, settings, onSettingsChange, onCompare, canCompare }: TranslationProviderSettingsProps) {
   const [comparing, setComparing] = useState(false);
   const [results, setResults] = useState<OpenRouterComparisonResult[]>([]);
+  const [models, setModels] = useState<OpenRouterModel[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsError, setModelsError] = useState("");
   const update = (patch: Partial<TranslationSettings>) => onSettingsChange({ ...settings, ...patch });
 
   const compare = async () => {
     setComparing(true);
     try { setResults(await onCompare()); } finally { setComparing(false); }
   };
+
+  useEffect(() => {
+    if (!open || !settings.openRouterApiKey.trim()) { setModels([]); setModelsError(""); return; }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      setModelsLoading(true);
+      setModelsError("");
+      void listOpenRouterModels(settings.openRouterApiKey, undefined, controller.signal)
+        .then(setModels)
+        .catch((error) => { if (!controller.signal.aborted) setModelsError(formatAppError(error)); })
+        .finally(() => { if (!controller.signal.aborted) setModelsLoading(false); });
+    }, 500);
+    return () => { window.clearTimeout(timer); controller.abort(); };
+  }, [open, settings.openRouterApiKey]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -36,7 +54,7 @@ export function TranslationProviderSettings({ open, onOpenChange, settings, onSe
         <div className="grid gap-4">
           <label className="grid gap-1.5 text-xs"><span>当前服务</span><select className={fieldClass} value={settings.provider} onChange={(event) => update({ provider: event.target.value as TranslationProvider })}><option value="microsoft-edge">Microsoft Edge（无需密钥）</option><option value="openrouter">OpenRouter</option></select></label>
           <label className="grid gap-1.5 text-xs"><span>OpenRouter API Key</span><input className={fieldClass} type="password" autoComplete="off" placeholder="sk-or-v1-…" value={settings.openRouterApiKey} onChange={(event) => update({ openRouterApiKey: event.target.value })} /></label>
-          <label className="grid gap-1.5 text-xs"><span>翻译模型</span><input className={fieldClass} spellCheck={false} value={settings.openRouterModel} onChange={(event) => update({ openRouterModel: event.target.value })} /></label>
+          <label className="grid gap-1.5 text-xs"><span className="flex items-center justify-between"><span>翻译模型</span><span className="text-muted-foreground">{modelsLoading ? "正在加载…" : models.length ? `${models.length} 个可用模型` : "可手动填写 ID"}</span></span><input className={fieldClass} list="openrouter-models" spellCheck={false} value={settings.openRouterModel} onChange={(event) => update({ openRouterModel: event.target.value })} /><datalist id="openrouter-models">{models.map((model) => <option key={model.id} value={model.id}>{model.name}</option>)}</datalist>{modelsError ? <span className="text-destructive">{modelsError}</span> : null}</label>
           <label className="grid gap-1.5 text-xs"><span>对比模型（逗号或换行分隔）</span><textarea className="min-h-20 rounded-md border bg-background p-2 font-mono text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/30" spellCheck={false} value={settings.comparisonModels} onChange={(event) => update({ comparisonModels: event.target.value })} /></label>
           {results.length ? <div className="grid gap-2 rounded-lg border p-3 text-xs">{results.map((result) => <div key={result.model} className="grid gap-1 border-b pb-2 last:border-0 last:pb-0"><div className="flex justify-between gap-3 font-mono"><span className="truncate">{result.model}</span><span className="shrink-0 text-muted-foreground">{result.durationMs} ms</span></div>{result.error ? <p className="text-destructive">{result.error}</p> : <p className="line-clamp-3 text-muted-foreground">{result.translations?.join(" / ")}</p>}</div>)}</div> : null}
         </div>

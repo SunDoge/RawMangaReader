@@ -1,6 +1,4 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
-import { generateText } from "ai";
 
 export type OpenRouterHttpTransport = typeof globalThis.fetch;
 
@@ -18,6 +16,28 @@ export interface OpenRouterComparisonResult {
   durationMs: number;
   translations?: string[];
   error?: string;
+}
+
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  contextLength?: number;
+}
+
+interface OpenRouterCompletion {
+  choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+  error?: { message?: string };
+}
+
+export async function listOpenRouterModels(apiKey: string, transport: OpenRouterHttpTransport = tauriFetch, signal?: AbortSignal): Promise<OpenRouterModel[]> {
+  if (!apiKey.trim()) return [];
+  const response = await transport("https://openrouter.ai/api/v1/models", { headers: { "Authorization": `Bearer ${apiKey.trim()}` }, signal });
+  const responseBody = await response.text();
+  let payload: { data?: Array<{ id?: unknown; name?: unknown; context_length?: unknown }>; error?: { message?: string } };
+  try { payload = JSON.parse(responseBody) as typeof payload; } catch { throw new Error(`OpenRouter 模型列表响应无法解析 (${response.status})`); }
+  if (!response.ok) throw new Error(`OpenRouter 模型列表请求失败 (${response.status}): ${payload.error?.message ?? responseBody}`);
+  if (!Array.isArray(payload.data)) throw new Error("OpenRouter 模型列表缺少 data 字段");
+  return payload.data.flatMap((model) => typeof model.id === "string" ? [{ id: model.id, name: typeof model.name === "string" ? model.name : model.id, contextLength: typeof model.context_length === "number" ? model.context_length : undefined }] : []).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function translationPrompt(texts: string[], from: string, to: string): string {
@@ -52,14 +72,22 @@ export async function translateWithOpenRouter(
   if (!apiKey.trim()) throw new Error("请先填写 OpenRouter API Key");
   if (!model.trim()) throw new Error("请先填写 OpenRouter 模型名称");
 
-  const openrouter = createOpenRouter({ apiKey: apiKey.trim(), fetch: transport });
-  const result = await generateText({
-    model: openrouter.chat(model.trim()),
-    prompt: translationPrompt(texts, from, to),
-    abortSignal: signal,
-    temperature: 0,
+  const response = await transport("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey.trim()}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: model.trim(), temperature: 0, messages: [{ role: "user", content: translationPrompt(texts, from, to) }] }),
+    signal,
   });
-  return parseTranslationArray(result.text, texts.length);
+  const responseBody = await response.text();
+  let completion: OpenRouterCompletion;
+  try { completion = JSON.parse(responseBody) as OpenRouterCompletion; } catch {
+    throw new Error(`OpenRouter 返回了无法解析的响应 (${response.status})`);
+  }
+  if (!response.ok) throw new Error(`OpenRouter 请求失败 (${response.status}): ${completion.error?.message ?? responseBody}`);
+  const content = completion.choices?.[0]?.message?.content;
+  const text = typeof content === "string" ? content : content?.filter((part) => part.type === "text").map((part) => part.text ?? "").join("");
+  if (!text) throw new Error("OpenRouter 成功响应中没有译文内容");
+  return parseTranslationArray(text, texts.length);
 }
 
 export async function compareOpenRouterModels(

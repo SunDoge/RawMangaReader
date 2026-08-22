@@ -24,4 +24,9 @@ describe("app preferences", () => {
     expect(formatAppError(new Error("network failed"))).toBe("network failed");
     expect(formatAppError({ code: 401 })).toBe('{"code":401}');
   });
+
+  it("migrates the unavailable legacy OpenRouter default", () => {
+    const storage = memoryStorage(JSON.stringify({ translationSettings: { openRouterModel: "google/gemini-2.5-flash" } }));
+    expect(loadPreferences(storage).translationSettings.openRouterModel).toBe("openrouter/free");
+  });
 });

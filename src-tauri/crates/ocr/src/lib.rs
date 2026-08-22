@@ -1,6 +1,6 @@
-use anyhow::{bail, Context, Result};
-use image::{imageops, RgbImage};
-use oar_ocr::prelude::{OAROCRBuilder, TextRegion, OAROCR};
+use anyhow::{Context, Result, bail};
+use image::{RgbImage, imageops};
+use oar_ocr::prelude::{OAROCR, OAROCRBuilder, TextRegion};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -22,6 +22,10 @@ pub struct RelativeRect {
 #[serde(default, rename_all = "camelCase")]
 pub struct VerticalMergeOptions {
     pub enabled: bool,
+    pub min_text_size_px: f32,
+    pub merge_adjacent_columns: bool,
+    pub min_column_overlap_ratio: f32,
+    pub max_column_gap_width_ratio: f32,
     pub min_aspect_ratio: f32,
     pub min_overlap_ratio: f32,
     pub max_center_offset_ratio: f32,
@@ -32,6 +36,10 @@ impl Default for VerticalMergeOptions {
     fn default() -> Self {
         Self {
             enabled: true,
+            min_text_size_px: 0.0,
+            merge_adjacent_columns: true,
+            min_column_overlap_ratio: 0.65,
+            max_column_gap_width_ratio: 0.5,
             min_aspect_ratio: 1.2,
             min_overlap_ratio: 0.5,
             max_center_offset_ratio: 0.15,
@@ -122,8 +130,12 @@ impl OcrEngine {
             .iter()
             .filter_map(|region| normalized_region(region, width, height))
             .collect::<Vec<_>>();
+        filter_small_regions(&mut regions, width, height, merge_options.min_text_size_px);
         if merge_options.enabled {
             regions = merge_vertical_regions(regions, width, height, merge_options);
+            if merge_options.merge_adjacent_columns {
+                regions = merge_adjacent_vertical_columns(regions, width, height, merge_options);
+            }
         }
         sort_manga_regions(&mut regions);
         Ok(regions)
@@ -185,6 +197,91 @@ impl OcrEngine {
                 / recognized.len() as f32,
         })
     }
+}
+
+fn region_short_side_px(region: &OcrRegion, image_width: u32, image_height: u32) -> f32 {
+    (region.width * image_width as f32).min(region.height * image_height as f32)
+}
+
+fn filter_small_regions(
+    regions: &mut Vec<OcrRegion>,
+    image_width: u32,
+    image_height: u32,
+    min_size_px: f32,
+) {
+    regions.retain(|region| {
+        region_short_side_px(region, image_width, image_height) >= min_size_px.max(0.0)
+    });
+}
+
+fn merge_adjacent_vertical_columns(
+    mut regions: Vec<OcrRegion>,
+    image_width: u32,
+    image_height: u32,
+    options: VerticalMergeOptions,
+) -> Vec<OcrRegion> {
+    regions.sort_by(|a, b| b.x.total_cmp(&a.x));
+    let mut consumed = vec![false; regions.len()];
+    let mut merged = Vec::with_capacity(regions.len());
+    for right_index in 0..regions.len() {
+        if consumed[right_index] {
+            continue;
+        }
+        let mut group = regions[right_index].clone();
+        let mut leftmost_index = right_index;
+        consumed[right_index] = true;
+        loop {
+            let next = (0..regions.len())
+                .filter(|&index| !consumed[index])
+                .filter(|&index| {
+                    can_merge_adjacent_columns(
+                        &regions[leftmost_index],
+                        &regions[index],
+                        image_width,
+                        image_height,
+                        options,
+                    )
+                })
+                .max_by(|&a, &b| regions[a].x.total_cmp(&regions[b].x));
+            let Some(next) = next else { break };
+            group = merge_region_pair(group, &regions[next]);
+            consumed[next] = true;
+            leftmost_index = next;
+        }
+        merged.push(group);
+    }
+    merged
+}
+
+fn can_merge_adjacent_columns(
+    right: &OcrRegion,
+    left: &OcrRegion,
+    image_width: u32,
+    image_height: u32,
+    options: VerticalMergeOptions,
+) -> bool {
+    if !is_vertical_region(right, image_width, image_height, options)
+        || !is_vertical_region(left, image_width, image_height, options)
+        || left.x + left.width / 2.0 >= right.x + right.width / 2.0
+    {
+        return false;
+    }
+    let top = right.y.max(left.y);
+    let bottom = (right.y + right.height).min(left.y + left.height);
+    let overlap = (bottom - top).max(0.0) * image_height as f32;
+    let right_height = right.height * image_height as f32;
+    let left_height = left.height * image_height as f32;
+    if overlap / right_height.min(left_height).max(1.0) < options.min_column_overlap_ratio {
+        return false;
+    }
+    let right_left = right.x * image_width as f32;
+    let left_right = (left.x + left.width) * image_width as f32;
+    let horizontal_gap = (right_left - left_right).max(0.0);
+    let max_width = (right.width.max(left.width) * image_width as f32).max(1.0);
+    let center_distance =
+        ((right.x + right.width / 2.0) - (left.x + left.width / 2.0)) * image_width as f32;
+    center_distance >= max_width * 0.35
+        && horizontal_gap <= max_width * options.max_column_gap_width_ratio
 }
 
 fn normalized_region(region: &TextRegion, width: u32, height: u32) -> Option<OcrRegion> {
@@ -263,22 +360,18 @@ fn merge_vertical_regions(
         }
 
         loop {
-            let next =
-                (0..regions.len())
-                    .filter(|&index| !consumed[index])
-                    .filter(|&index| {
-                        can_merge_vertical(
-                            &column,
-                            &regions[index],
-                            image_width,
-                            image_height,
-                            options,
-                        )
-                    })
-                    .min_by(|&left, &right| {
-                        vertical_gap(&column, &regions[left], image_height)
-                            .total_cmp(&vertical_gap(&column, &regions[right], image_height))
-                    });
+            let next = (0..regions.len())
+                .filter(|&index| !consumed[index])
+                .filter(|&index| {
+                    can_merge_vertical(&column, &regions[index], image_width, image_height, options)
+                })
+                .min_by(|&left, &right| {
+                    vertical_gap(&column, &regions[left], image_height).total_cmp(&vertical_gap(
+                        &column,
+                        &regions[right],
+                        image_height,
+                    ))
+                });
             let Some(next) = next else { break };
             column = merge_region_pair(column, &regions[next]);
             consumed[next] = true;
@@ -392,27 +485,33 @@ mod tests {
 
     #[test]
     fn validates_relative_regions() {
-        assert!(validate_rect(RelativeRect {
-            x: 0.1,
-            y: 0.2,
-            width: 0.3,
-            height: 0.4
-        })
-        .is_ok());
-        assert!(validate_rect(RelativeRect {
-            x: 0.9,
-            y: 0.2,
-            width: 0.2,
-            height: 0.4
-        })
-        .is_err());
-        assert!(validate_rect(RelativeRect {
-            x: 0.1,
-            y: 0.2,
-            width: 0.0,
-            height: 0.4
-        })
-        .is_err());
+        assert!(
+            validate_rect(RelativeRect {
+                x: 0.1,
+                y: 0.2,
+                width: 0.3,
+                height: 0.4
+            })
+            .is_ok()
+        );
+        assert!(
+            validate_rect(RelativeRect {
+                x: 0.9,
+                y: 0.2,
+                width: 0.2,
+                height: 0.4
+            })
+            .is_err()
+        );
+        assert!(
+            validate_rect(RelativeRect {
+                x: 0.1,
+                y: 0.2,
+                width: 0.0,
+                height: 0.4
+            })
+            .is_err()
+        );
     }
 
     #[test]
@@ -473,7 +572,10 @@ mod tests {
             region(0.74, 0.27, 0.04, 0.15, "左"),
         ];
 
-        assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
+        assert_eq!(
+            merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(),
+            2
+        );
     }
 
     #[test]
@@ -509,7 +611,10 @@ mod tests {
             region(0.8, 0.4, 0.04, 0.1, "下"),
         ];
 
-        assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
+        assert_eq!(
+            merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(),
+            2
+        );
     }
 
     #[test]
@@ -519,6 +624,53 @@ mod tests {
             region(0.2, 0.15, 0.2, 0.04, "second"),
         ];
 
-        assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
+        assert_eq!(
+            merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn merges_strongly_overlapping_adjacent_vertical_columns_right_to_left() {
+        let regions = vec![
+            region(0.156, 0.523, 0.043, 0.068, "大事な"),
+            region(0.122, 0.522, 0.048, 0.086, "仕事中に"),
+        ];
+        let merged =
+            merge_adjacent_vertical_columns(regions, 800, 1142, VerticalMergeOptions::default());
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].text, "大事な仕事中に");
+    }
+
+    #[test]
+    fn keeps_staggered_neighboring_columns_separate() {
+        let regions = vec![
+            region(0.80, 0.10, 0.04, 0.12, "右"),
+            region(0.75, 0.24, 0.04, 0.12, "左"),
+        ];
+        assert_eq!(
+            merge_adjacent_vertical_columns(regions, 1000, 1000, VerticalMergeOptions::default())
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn measures_text_size_from_the_bbox_short_side() {
+        assert_eq!(
+            region_short_side_px(&region(0.1, 0.1, 0.02, 0.1, "small"), 800, 1200),
+            16.0
+        );
+    }
+
+    #[test]
+    fn filters_regions_below_the_configured_text_size() {
+        let mut regions = vec![
+            region(0.1, 0.1, 0.01, 0.1, "tiny"),
+            region(0.2, 0.1, 0.04, 0.1, "dialogue"),
+        ];
+        filter_small_regions(&mut regions, 1000, 1000, 20.0);
+        assert_eq!(regions.len(), 1);
+        assert_eq!(regions[0].text, "dialogue");
     }
 }

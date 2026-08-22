@@ -41,6 +41,10 @@ export interface RegisteredImage {
 
 export interface VerticalMergeOptions {
   enabled: boolean;
+  minTextSizePx: number;
+  mergeAdjacentColumns: boolean;
+  minColumnOverlapRatio: number;
+  maxColumnGapWidthRatio: number;
   minAspectRatio: number;
   minOverlapRatio: number;
   maxCenterOffsetRatio: number;
@@ -77,6 +81,10 @@ export interface ImageCacheStats {
 
 export const DEFAULT_VERTICAL_MERGE_OPTIONS: VerticalMergeOptions = {
   enabled: true,
+  minTextSizePx: 0,
+  mergeAdjacentColumns: true,
+  minColumnOverlapRatio: 0.65,
+  maxColumnGapWidthRatio: 0.5,
   minAspectRatio: 1.2,
   minOverlapRatio: 0.5,
   maxCenterOffsetRatio: 0.15,

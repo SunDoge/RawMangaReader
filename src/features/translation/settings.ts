@@ -10,8 +10,8 @@ export interface TranslationSettings {
 export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
   provider: "microsoft-edge",
   openRouterApiKey: "",
-  openRouterModel: "google/gemini-2.5-flash",
-  comparisonModels: "google/gemini-2.5-flash\nopenai/gpt-4.1-mini",
+  openRouterModel: "openrouter/free",
+  comparisonModels: "openrouter/free\ndots-studio/dots-3-note-preview:free",
 };
 
 export function parseComparisonModels(value: string): string[] {
