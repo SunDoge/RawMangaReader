@@ -17,16 +17,18 @@ import { OcrDebugSettings } from "@/components/ocr-debug-settings";
 import { TranslationOverlaySettings } from "@/components/translation-overlay-settings";
 import { TranslationProviderSettings } from "@/components/translation-provider-settings";
 import { CacheManager } from "@/components/cache-manager";
-import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
+import { getOcrModelStatus, recognizePage, recognizeRegion, registerImages, releaseImages, scheduleImagePreload, type OcrModelStatus, type PrefetchedOcr, type RegisteredImage, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import { compareOpenRouterModels, translateWithOpenRouter } from "@/features/translation/providers/openrouter";
-import { DEFAULT_TRANSLATION_SETTINGS, parseComparisonModels, type TranslationSettings } from "@/features/translation/settings";
-import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
+import { parseComparisonModels, type TranslationSettings } from "@/features/translation/settings";
+import type { TranslationOverlayOptions } from "@/features/translation/overlay";
+import { DEFAULT_APP_PREFERENCES, formatAppError, loadPreferences, savePreferences } from "@/features/preferences";
 import type { IAnnotationType } from "@/types/annotation";
 import { isSupportedImage, naturalSort, prioritizeImageIds } from "./utils";
 
 export default function Home() {
+  const [initialPreferences] = useState(() => loadPreferences(localStorage));
   const [images, setImages] = useState<RegisteredImage[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -38,10 +40,10 @@ export default function Home() {
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
-  const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
-  const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
-  const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS });
-  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...DEFAULT_TRANSLATION_SETTINGS });
+  const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>(initialPreferences.mergeOptions);
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(initialPreferences.showBoundingBoxes);
+  const [translationOverlayOptions, setTranslationOverlayOptions] = useState<TranslationOverlayOptions>(initialPreferences.translationOverlayOptions);
+  const [translationSettings, setTranslationSettings] = useState<TranslationSettings>({ ...initialPreferences.translationSettings, openRouterApiKey: "" });
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const imagesRef = useRef<RegisteredImage[]>([]);
   const currentIndexRef = useRef(0);
@@ -51,8 +53,12 @@ export default function Home() {
   useEffect(() => {
     void getOcrModelStatus()
       .then(setModelStatus)
-      .catch((error) => toast.error("无法读取 OCR 模型状态", { description: String(error) }));
+      .catch((error) => toast.error("无法读取 OCR 模型状态", { description: formatAppError(error) }));
   }, []);
+
+  useEffect(() => {
+    savePreferences(localStorage, { mergeOptions, showBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels } });
+  }, [mergeOptions, showBoundingBoxes, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider]);
 
   useEffect(() => () => {
     void releaseImages(imagesRef.current.map((image) => image.id));
@@ -91,7 +97,7 @@ export default function Home() {
       imageIds: prioritizeImageIds(images.map((image) => image.id), currentIndex),
       mergeOptions,
       recognize: Boolean(modelStatus?.installed),
-    }).catch((error) => toast.error("无法调度图片预识别", { description: String(error) }));
+    }).catch((error) => toast.error("无法调度图片预识别", { description: formatAppError(error) }));
   }, [currentIndex, images, mergeOptions, modelStatus?.installed]);
 
   const loadImages = useCallback(async (paths: string[]) => {
@@ -114,7 +120,7 @@ export default function Home() {
     try {
       await loadImages(Array.isArray(selected) ? selected : [selected]);
     } catch (error) {
-      toast.error("无法注册图片资源", { description: String(error) });
+      toast.error("无法注册图片资源", { description: formatAppError(error) });
     }
   }, [loadImages]);
 
@@ -130,7 +136,7 @@ export default function Home() {
     try {
       await loadImages(paths);
     } catch (error) {
-      toast.error("无法注册图片资源", { description: String(error) });
+      toast.error("无法注册图片资源", { description: formatAppError(error) });
     }
   }, [loadImages]);
 
@@ -175,7 +181,7 @@ export default function Home() {
       updateAnnotations(next);
       toast.success(`识别完成，共找到 ${next.length} 个文本区域`);
     } catch (error) {
-      toast.error("整页 OCR 失败", { description: String(error) });
+      toast.error("整页 OCR 失败", { description: formatAppError(error) });
     } finally {
       setPageProcessing(false);
     }
@@ -201,7 +207,7 @@ export default function Home() {
       }));
       toast.success(`翻译完成，共 ${translated.length} 条`);
     } catch (error) {
-      toast.error("翻译失败", { description: String(error) });
+      toast.error("翻译失败", { description: formatAppError(error) });
     } finally {
       setTranslating(false);
     }
@@ -273,8 +279,8 @@ export default function Home() {
         showBoundingBoxes={showBoundingBoxes}
         onShowBoundingBoxesChange={setShowBoundingBoxes}
         onReset={() => {
-          setMergeOptions({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
-          setShowBoundingBoxes(true);
+          setMergeOptions({ ...DEFAULT_APP_PREFERENCES.mergeOptions });
+          setShowBoundingBoxes(DEFAULT_APP_PREFERENCES.showBoundingBoxes);
         }}
       />
       <TranslationOverlaySettings
@@ -282,7 +288,7 @@ export default function Home() {
         onOpenChange={setTranslationOverlaySettingsOpen}
         options={translationOverlayOptions}
         onOptionsChange={setTranslationOverlayOptions}
-        onReset={() => setTranslationOverlayOptions({ ...DEFAULT_TRANSLATION_OVERLAY_OPTIONS })}
+        onReset={() => setTranslationOverlayOptions({ ...DEFAULT_APP_PREFERENCES.translationOverlayOptions })}
       />
       <TranslationProviderSettings open={translationProviderSettingsOpen} onOpenChange={setTranslationProviderSettingsOpen} settings={translationSettings} onSettingsChange={setTranslationSettings} onCompare={compareTranslationModels} canCompare={currentAnnotations.some((annotation) => Boolean(annotation.ocr?.trim()))} />
       <CacheManager open={cacheManagerOpen} onOpenChange={setCacheManagerOpen} />
