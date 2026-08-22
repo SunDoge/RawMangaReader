@@ -16,11 +16,11 @@ describe("translation overlay direction", () => {
 
 describe("translation font fitting", () => {
   it("allows tiny text to fit narrow OCR boxes", () => {
-    expect(translationFitBounds(12, 80, 1)).toEqual({ min: 2, max: 10.8 });
+    expect(translationFitBounds(12, 80)).toEqual({ min: 2, max: 10.8 });
   });
 
   it("caps text on large boxes and applies the configured scale", () => {
-    expect(translationFitBounds(300, 400, 1).max).toBe(72);
-    expect(translationFitBounds(100, 200, 0.8).max).toBeCloseTo(57.6);
+    expect(translationFitBounds(300, 400).max).toBe(72);
+    expect(translationFitBounds(100, 200).max).toBe(72);
   });
 });

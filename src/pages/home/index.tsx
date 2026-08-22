@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Clock3, Database, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
-import { ask, open } from "@tauri-apps/plugin-dialog";
+import { Clock3, Database, FileDown, FileImage, ImagePlus, FolderOpen, HardDrive, Info, Languages, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles, Trash2, X } from "lucide-react";
+import { ask, open, save } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { toast } from "sonner";
+import { useLocation, useNavigate } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -25,20 +26,20 @@ import { DEFAULT_APP_PREFERENCES, formatAppError } from "@/features/preferences"
 import { addRecentSources, sourceName, type RecentSource } from "@/features/recent-sources";
 import { initializeFrontendStorage, persistPreferences, persistRecentSources } from "@/features/storage/database";
 import { configureHttpProxy, configureNativeHttpProxy } from "@/features/http/proxy";
+import { renderTranslatedPng, writeExportedImage } from "@/features/export/render";
 import type { IAnnotationType } from "@/types/annotation";
 import { naturalSort, prioritizeImageIds } from "./utils";
 
 export default function Home() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const activePanel = location.pathname.startsWith("/settings/") ? location.pathname.slice("/settings/".length) : null;
+  const openPanel = useCallback((panel: string) => navigate(`/settings/${panel}`), [navigate]);
+  const closePanel = useCallback((open: boolean) => { if (!open) navigate("/"); }, [navigate]);
   const [images, setImages] = useState<RegisteredImage[]>([]);
   const [recentSources, setRecentSources] = useState<RecentSource[]>([]);
   const [storageReady, setStorageReady] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [aboutOpen, setAboutOpen] = useState(false);
-  const [modelManagerOpen, setModelManagerOpen] = useState(false);
-  const [ocrSettingsOpen, setOcrSettingsOpen] = useState(false);
-  const [translationOverlaySettingsOpen, setTranslationOverlaySettingsOpen] = useState(false);
-  const [translationProviderSettingsOpen, setTranslationProviderSettingsOpen] = useState(false);
-  const [cacheManagerOpen, setCacheManagerOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
@@ -222,7 +223,7 @@ export default function Home() {
 
   const runOCR = useCallback(async (annotation: IAnnotationType) => {
     if (!modelStatus?.installed) {
-      setModelManagerOpen(true);
+      openPanel("ocr-model");
       throw new Error("OCR 模型尚未安装");
     }
     const result = await recognizeRegion(images[currentIndex].id, annotation);
@@ -231,7 +232,7 @@ export default function Home() {
 
   const runPageOCR = useCallback(async () => {
     if (!modelStatus?.installed) {
-      setModelManagerOpen(true);
+      openPanel("ocr-model");
       return;
     }
     const image = images[currentIndex];
@@ -256,7 +257,7 @@ export default function Home() {
     } finally {
       setPageProcessing(false);
     }
-  }, [currentAnnotations.length, currentIndex, images, mergeOptions, modelStatus?.installed, pageProcessing, updateAnnotations]);
+  }, [currentAnnotations.length, currentIndex, images, mergeOptions, modelStatus?.installed, openPanel, pageProcessing, updateAnnotations]);
 
   const translateAll = useCallback(async () => {
     if (translating) return;
@@ -292,6 +293,21 @@ export default function Home() {
     return results;
   }, [currentAnnotations, translationSettings]);
 
+  const exportCurrentPage = useCallback(async () => {
+    const image = images[currentIndex];
+    if (!image || !currentAnnotations.some((item) => item.translation?.trim())) return;
+    try {
+      const baseName = image.path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || `page-${currentIndex + 1}`;
+      const outputPath = await save({ defaultPath: `${baseName}-translated.png`, filters: [{ name: "PNG 图片", extensions: ["png"] }] });
+      if (!outputPath) return;
+      const bytes = await renderTranslatedPng(image.path, currentAnnotations, translationOverlayOptions);
+      await writeExportedImage(outputPath, bytes);
+      toast.success("嵌字图片已导出", { description: outputPath });
+    } catch (error) {
+      toast.error("导出失败", { description: formatAppError(error) });
+    }
+  }, [currentAnnotations, currentIndex, images, translationOverlayOptions]);
+
   const actions = (
     <>
       <Button size="sm" onClick={() => void openImages()}><ImagePlus data-icon="inline-start" />选择图片</Button>
@@ -300,6 +316,7 @@ export default function Home() {
         {pageProcessing ? <LoaderCircle className="animate-spin" data-icon="inline-start" /> : <ScanText data-icon="inline-start" />}
         {pageProcessing ? "识别中" : "整页 OCR"}
       </Button>
+      <Button size="sm" variant="ghost" onClick={() => void exportCurrentPage()} disabled={!currentAnnotations.some((item) => item.translation?.trim())}><FileDown data-icon="inline-start" />导出嵌字</Button>
     </>
   );
 
@@ -313,12 +330,12 @@ export default function Home() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="打开菜单"><Menu /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setModelManagerOpen(true)}><HardDrive />OCR 模型</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setOcrSettingsOpen(true)}><SlidersHorizontal />OCR 合并调试</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTranslationOverlaySettingsOpen(true)}><Languages />译文回填</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setTranslationProviderSettingsOpen(true)}><Sparkles />翻译服务</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setCacheManagerOpen(true)}><Database />缓存</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openPanel("ocr-model")}><HardDrive />OCR 模型</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openPanel("ocr-merge")}><SlidersHorizontal />OCR 合并调试</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openPanel("typesetting")}><Languages />译文回填</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openPanel("translation")}><Sparkles />翻译服务</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openPanel("cache")}><Database />缓存</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => openPanel("about")}><Info />关于</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </header>
@@ -352,11 +369,11 @@ export default function Home() {
           </div>
         </section>
       )}
-      <About open={aboutOpen} onOpenChange={setAboutOpen} />
-      <OcrModelManager open={modelManagerOpen} onOpenChange={setModelManagerOpen} status={modelStatus} onStatusChange={setModelStatus} />
+      <About open={activePanel === "about"} onOpenChange={closePanel} />
+      <OcrModelManager open={activePanel === "ocr-model"} onOpenChange={closePanel} status={modelStatus} onStatusChange={setModelStatus} />
       <OcrDebugSettings
-        open={ocrSettingsOpen}
-        onOpenChange={setOcrSettingsOpen}
+        open={activePanel === "ocr-merge"}
+        onOpenChange={closePanel}
         options={mergeOptions}
         onOptionsChange={setMergeOptions}
         showBoundingBoxes={showBoundingBoxes}
@@ -372,14 +389,14 @@ export default function Home() {
         }}
       />
       <TranslationOverlaySettings
-        open={translationOverlaySettingsOpen}
-        onOpenChange={setTranslationOverlaySettingsOpen}
+        open={activePanel === "typesetting"}
+        onOpenChange={closePanel}
         options={translationOverlayOptions}
         onOptionsChange={setTranslationOverlayOptions}
         onReset={() => setTranslationOverlayOptions({ ...DEFAULT_APP_PREFERENCES.translationOverlayOptions })}
       />
-      <TranslationProviderSettings open={translationProviderSettingsOpen} onOpenChange={setTranslationProviderSettingsOpen} settings={translationSettings} onSettingsChange={setTranslationSettings} onCompare={compareTranslationModels} canCompare={currentAnnotations.some((annotation) => Boolean(annotation.ocr?.trim()))} />
-      <CacheManager open={cacheManagerOpen} onOpenChange={setCacheManagerOpen} />
+      <TranslationProviderSettings open={activePanel === "translation"} onOpenChange={closePanel} settings={translationSettings} onSettingsChange={setTranslationSettings} onCompare={compareTranslationModels} canCompare={currentAnnotations.some((annotation) => Boolean(annotation.ocr?.trim()))} />
+      <CacheManager open={activePanel === "cache"} onOpenChange={closePanel} />
     </main>
   );
 }
