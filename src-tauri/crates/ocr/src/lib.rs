@@ -241,7 +241,7 @@ fn merge_adjacent_vertical_columns(
     image_height: u32,
     options: VerticalMergeOptions,
 ) -> Vec<OcrRegion> {
-    regions.sort_by(|a, b| b.x.total_cmp(&a.x));
+    regions.sort_by(|a, b| region_center_x(b).total_cmp(&region_center_x(a)));
     let mut consumed = vec![false; regions.len()];
     let mut merged = Vec::with_capacity(regions.len());
     for right_index in 0..regions.len() {
@@ -263,7 +263,9 @@ fn merge_adjacent_vertical_columns(
                         options,
                     )
                 })
-                .max_by(|&a, &b| regions[a].x.total_cmp(&regions[b].x));
+                .max_by(|&a, &b| {
+                    region_center_x(&regions[a]).total_cmp(&region_center_x(&regions[b]))
+                });
             let Some(next) = next else { break };
             group = merge_region_pair(group, &regions[next]);
             consumed[next] = true;
@@ -272,6 +274,10 @@ fn merge_adjacent_vertical_columns(
         merged.push(group);
     }
     merged
+}
+
+fn region_center_x(region: &OcrRegion) -> f32 {
+    region.x + region.width / 2.0
 }
 
 fn can_merge_adjacent_columns(
@@ -283,7 +289,7 @@ fn can_merge_adjacent_columns(
 ) -> bool {
     if !is_vertical_region(right, image_width, image_height, options)
         || !is_vertical_region(left, image_width, image_height, options)
-        || left.x + left.width / 2.0 >= right.x + right.width / 2.0
+        || region_center_x(left) >= region_center_x(right)
     {
         return false;
     }
@@ -299,8 +305,7 @@ fn can_merge_adjacent_columns(
     let left_right = (left.x + left.width) * image_width as f32;
     let horizontal_gap = (right_left - left_right).max(0.0);
     let max_width = (right.width.max(left.width) * image_width as f32).max(1.0);
-    let center_distance =
-        ((right.x + right.width / 2.0) - (left.x + left.width / 2.0)) * image_width as f32;
+    let center_distance = (region_center_x(right) - region_center_x(left)) * image_width as f32;
     center_distance >= max_width * 0.35
         && horizontal_gap <= max_width * options.max_column_gap_width_ratio
 }
@@ -661,6 +666,19 @@ mod tests {
             merge_adjacent_vertical_columns(regions, 800, 1142, VerticalMergeOptions::default());
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].text, "大事な仕事中に");
+    }
+
+    #[test]
+    fn merges_unequal_width_columns_by_center_from_right_to_left() {
+        let regions = vec![
+            region(0.12, 0.10, 0.04, 0.12, "左"),
+            region(0.20, 0.10, 0.04, 0.12, "右"),
+            region(0.15, 0.10, 0.06, 0.12, "中"),
+        ];
+        let merged =
+            merge_adjacent_vertical_columns(regions, 1000, 1000, VerticalMergeOptions::default());
+        assert_eq!(merged.len(), 1);
+        assert_eq!(merged[0].text, "右中左");
     }
 
     #[test]
