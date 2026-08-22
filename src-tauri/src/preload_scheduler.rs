@@ -1,5 +1,5 @@
 use crate::image_store::ImageStore;
-use crate::ocr_commands::{model_directory, recognize_page_cached, OcrState};
+use crate::ocr_commands::{model_directory, recognize_page_cached, OcrModelKind, OcrState};
 use ocr::{OcrRegion, VerticalMergeOptions};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -16,6 +16,7 @@ pub struct PreloadRequest {
     image_ids: Vec<String>,
     merge_options: VerticalMergeOptions,
     recognize: bool,
+    model_kind: OcrModelKind,
 }
 
 #[derive(Clone, Serialize)]
@@ -37,7 +38,7 @@ impl PreloadScheduler {
         tauri::async_runtime::spawn(async move {
             while let Some(mut request) = receiver.recv().await {
                 'generation: loop {
-                    let Ok(directory) = model_directory(&app) else {
+                    let Ok(directory) = model_directory(&app, request.model_kind) else {
                         return;
                     };
                     for image_id in request.image_ids.clone() {
@@ -64,6 +65,7 @@ impl PreloadScheduler {
                             directory.clone(),
                             image_id.clone(),
                             request.merge_options,
+                            request.model_kind,
                         )
                         .await;
                         let mut replacement = None;

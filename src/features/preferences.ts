@@ -1,8 +1,9 @@
-import { DEFAULT_VERTICAL_MERGE_OPTIONS, type VerticalMergeOptions } from "@/features/ocr/api";
+import { DEFAULT_VERTICAL_MERGE_OPTIONS, type OcrModelKind, type VerticalMergeOptions } from "@/features/ocr/api";
 import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
 import { DEFAULT_TRANSLATION_SETTINGS, type TranslationSettings } from "@/features/translation/settings";
 
 export interface AppPreferences {
+  ocrModelKind: OcrModelKind;
   mergeOptions: VerticalMergeOptions;
   showBoundingBoxes: boolean;
   showRawBoundingBoxes: boolean;
@@ -11,6 +12,7 @@ export interface AppPreferences {
 }
 
 export const DEFAULT_APP_PREFERENCES: AppPreferences = {
+  ocrModelKind: "small",
   mergeOptions: { ...DEFAULT_VERTICAL_MERGE_OPTIONS },
   showBoundingBoxes: true,
   showRawBoundingBoxes: false,
