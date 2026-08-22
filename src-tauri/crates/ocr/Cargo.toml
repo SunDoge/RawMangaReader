@@ -6,6 +6,3 @@ publish = false
 
 [dependencies]
 oar-ocr = "0.9.2"
-
-[build-dependencies]
-openssl-sys = { version = "0.9", features = ["vendored"] }
