@@ -42,10 +42,12 @@ export async function listOpenRouterModels(apiKey: string, transport: OpenRouter
 
 function translationPrompt(texts: string[], from: string, to: string): string {
   return [
-    `Translate each item from ${from} to ${to}.`,
+    `Translate this ordered set of speech bubbles from one manga page from ${from} to ${to}.`,
+    "Read every item together as page-level context before translating. Resolve omitted subjects, pronouns, names, terminology, and tone consistently across bubbles.",
+    "Each input object contains its stable index and source text. Translate only the text; never merge, split, reorder, omit, or invent bubbles.",
     "Return only a JSON array of strings, in exactly the same order and with exactly the same length.",
-    "Preserve names, punctuation, and the tone of manga dialogue. Do not add explanations.",
-    JSON.stringify(texts),
+    "Use natural concise Chinese suitable for typesetting back into the original bubble. Preserve names, punctuation, sound effects, and character voice. Do not add explanations.",
+    JSON.stringify(texts.map((text, index) => ({ index, text }))),
   ].join("\n");
 }
 

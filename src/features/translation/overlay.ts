@@ -14,12 +14,12 @@ export const DEFAULT_TRANSLATION_OVERLAY_OPTIONS: TranslationOverlayOptions = {
   backgroundOpacity: 0.92,
 };
 
-export function translationFitBounds(width: number, height: number, fontScale: number): { min: number; max: number } {
+export function translationFitBounds(width: number, height: number): { min: number; max: number } {
   const shortSide = Math.min(width, height);
   const longSide = Math.max(width, height);
   return {
     min: Math.max(2, Math.min(5, shortSide * 0.16)),
-    max: Math.max(2, Math.min(72, Math.min(shortSide * 0.9, longSide * 0.48)) * fontScale),
+    max: Math.max(2, Math.min(72, Math.min(shortSide * 0.9, longSide * 0.48))),
   };
 }
 

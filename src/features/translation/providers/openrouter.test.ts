@@ -12,7 +12,10 @@ describe("OpenRouter translation provider", () => {
     const [url, init] = transport.mock.calls[0];
     expect(String(url)).toBe("https://openrouter.ai/api/v1/chat/completions");
     expect(new Headers(init?.headers).get("authorization")).toBe("Bearer test-key");
-    expect(JSON.parse(String(init?.body))).toMatchObject({ model: "test/model", temperature: 0, messages: [{ role: "user" }] });
+    const body = JSON.parse(String(init?.body));
+    expect(body).toMatchObject({ model: "test/model", temperature: 0, messages: [{ role: "user" }] });
+    expect(body.messages[0].content).toContain("page-level context");
+    expect(body.messages[0].content).toContain('[{"index":0,"text":"こんにちは"},{"index":1,"text":"世界"}]');
   });
 
   it("accepts fenced JSON and rejects incomplete batches", () => {

@@ -1,3 +1,4 @@
+mod export_commands;
 mod image_store;
 mod library_commands;
 mod network;
@@ -34,6 +35,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            export_commands::write_exported_image,
             ocr_commands::get_ocr_model_status,
             ocr_commands::download_ocr_model,
             ocr_commands::remove_ocr_model,

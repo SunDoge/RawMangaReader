@@ -29,8 +29,8 @@ export function FittedTranslation({ text, options }: FittedTranslationProps) {
       content.style.lineHeight = direction === "vertical" ? "1.12" : "1.18";
       content.style.letterSpacing = direction === "vertical" ? "0.03em" : "0";
 
-      let { min: low, max: high } = translationFitBounds(width, height, options.fontScale);
-      content.style.fontSize = `${low}px`;
+      let { min: low, max: high } = translationFitBounds(width, height);
+      content.style.fontSize = `${low * options.fontScale}px`;
       if (content.scrollWidth > width + 0.5 || content.scrollHeight > height + 0.5) {
         low = 1;
       }
