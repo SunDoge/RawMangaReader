@@ -1,218 +1,106 @@
-import React, { useCallback, useRef, useState } from "react";
-import classNames from "classnames";
-import { Button, Dropdown, Empty, MenuProps, message } from "antd";
-import style from "./style.module.less";
-import { IAnnotationType } from "@/types/annotation";
-import ThumbnailList from "@/components/thumbnail-list";
-import { AnnotationBlock } from "@/components/annotation-block";
-import { zip } from "lodash";
-import { naturalSort } from "./utils";
-import {
-  FileImageOutlined,
-  FolderOpenOutlined,
-  MenuOutlined,
-  UploadOutlined,
-} from "@ant-design/icons";
+import { useCallback, useRef, useState } from "react";
+import { ImagePlus, FolderOpen, Info, Menu, ScanText, Sparkles } from "lucide-react";
+import { open } from "@tauri-apps/plugin-dialog";
+import { readDir } from "@tauri-apps/plugin-fs";
+import { join } from "@tauri-apps/api/path";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
 import { About } from "@/components/about";
-import { areAreasEqual } from "@/utils";
-import * as dialog from "@tauri-apps/plugin-dialog";
-import * as fs from "@tauri-apps/plugin-fs";
+import { ThumbnailList } from "@/components/thumbnail-list";
+import { AnnotationBlock } from "@/components/annotation-block";
+import type { IAnnotationType } from "@/types/annotation";
+import { isSupportedImage, naturalSort } from "./utils";
 
-interface IProps {}
+export default function Home() {
+  const [images, setImages] = useState<string[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const annotations = useRef(new Map<string, IAnnotationType[]>());
+  const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
 
-export const Home: React.FC<IProps> = (_props) => {
-  const [imageList, setImageList] = useState<string[]>([]);
-  const [currentSelected, setCurrentSelected] = useState<number>(NaN);
-  const [isMenuOpen, setIsMenuOpen] = useState<boolean>(false);
+  const loadImages = useCallback((paths: string[]) => {
+    const sorted = [...paths].sort(naturalSort);
+    setImages(sorted);
+    setCurrentIndex(0);
+    setCurrentAnnotations(annotations.current.get(sorted[0]) ?? []);
+  }, []);
 
-  const annotationMap = useRef<Map<string, IAnnotationType[]>>(new Map());
-  const [currentAnnotationList, setCurrentAnnotationList] = useState<
-    IAnnotationType[]
-  >([]);
-
-  const [messageApi, contextHolder] = message.useMessage();
-
-  // 选择多个图片
   const openImages = useCallback(async () => {
-    const selected = await dialog.open({
-      multiple: true,
-    });
+    const selected = await open({ multiple: true, filters: [{ name: "图片", extensions: ["jpg", "jpeg", "png", "webp", "bmp", "gif", "avif"] }] });
+    if (!selected) return;
+    loadImages(Array.isArray(selected) ? selected : [selected]);
+  }, [loadImages]);
 
-    if (selected === null) {
+  const openFolder = useCallback(async () => {
+    const selected = await open({ directory: true, multiple: false });
+    if (!selected || Array.isArray(selected)) return;
+    const entries = await readDir(selected);
+    const paths = await Promise.all(entries.filter((entry) => entry.isFile && isSupportedImage(entry.name)).map((entry) => join(selected, entry.name)));
+    if (!paths.length) {
+      toast.error("这个文件夹里没有支持的图片");
       return;
-    } else if (Array.isArray(selected)) {
-      selected.sort(naturalSort);
-      setImageList(selected);
-    } else {
-      setImageList([selected]);
     }
-    setCurrentSelected(0);
+    loadImages(paths);
+  }, [loadImages]);
+
+  const selectImage = useCallback((index: number) => {
+    if (index < 0 || index >= images.length) return;
+    setCurrentIndex(index);
+    setCurrentAnnotations(annotations.current.get(images[index]) ?? []);
+  }, [images]);
+
+  const updateAnnotations = useCallback((next: IAnnotationType[]) => {
+    setCurrentAnnotations(next);
+    annotations.current.set(images[currentIndex], next);
+  }, [currentIndex, images]);
+
+  const runOCR = useCallback(async (_annotation: IAnnotationType) => {
+    toast.info("OCR 引擎将在下一阶段接入");
+    return { ocr: "", translate: "" };
   }, []);
 
-  // 选择一个文件夹，然后加载文件夹下的所有图片
-  const openImageFolder = useCallback(async () => {
-    const selected = await dialog.open({
-      directory: true,
-    });
-    if (Array.isArray(selected)) {
-      console.log("only one folder can be selected");
-    } else if (selected === null) {
-      console.log("no folder selected");
-    } else {
-      const entries = await fs.readDir(selected);
-      const images = entries.map((entry) => entry.name);
-      setImageList(images);
-    }
-    setCurrentSelected(0);
-  }, []);
-
-  const handleAnnotationListChange = useCallback(
-    (list: IAnnotationType[]) => {
-      setCurrentAnnotationList(list);
-      annotationMap.current.set(imageList[currentSelected], list);
-
-      console.log(
-        `length of list ${list.length} and lenght of current ${currentAnnotationList.length}`,
-      );
-      if (list.length > currentAnnotationList.length) {
-        // 增加了item
-        list.map((item) => {
-          if (item.ocr === undefined) {
-            // TODO: 执行某些回调，修改对应item
-            console.log("should update this newly added item: ", item);
-            handleOCRProcess(item).then((result) => {
-              console.log(result);
-            });
-          }
-          return item;
-        });
-      } else if (list.length === currentAnnotationList.length) {
-        // 找到修改的item
-        zip(list, currentAnnotationList).map(([newItem, oldItem]) => {
-          if (!areAreasEqual(newItem!, oldItem!)) {
-            console.log("should update this changed item: ", newItem);
-            // handleOCRProcess(newItem!).then((result) => {
-            //   console.log(result);
-            // })
-          }
-        });
-      }
-    },
-    [imageList, currentSelected],
+  const actions = (
+    <>
+      <Button size="sm" onClick={() => void openImages()}><ImagePlus data-icon="inline-start" />选择图片</Button>
+      <Button size="sm" variant="outline" onClick={() => void openFolder()}><FolderOpen data-icon="inline-start" />打开文件夹</Button>
+      <Button size="sm" variant="ghost" disabled><ScanText data-icon="inline-start" />OCR 重构中</Button>
+    </>
   );
-
-  const handleOCRProcess = useCallback(
-    async (annotation: IAnnotationType) => {
-      const curImagePath = imageList[currentSelected];
-      console.debug("OCR is disabled during the Tauri 2 migration", {
-        annotation,
-        curImagePath,
-      });
-      messageApi.info("OCR 暂时不可用，正在进行整体重构");
-      return {};
-    },
-    [imageList, currentSelected, messageApi],
-  );
-
-  const handleImageSelected = useCallback(
-    (index: number) => {
-      setCurrentSelected(index);
-      setCurrentAnnotationList(
-        annotationMap.current.get(imageList[index]) || [],
-      );
-    },
-    [imageList],
-  );
-
-  const menuItems: MenuProps["items"] = [
-    {
-      key: "1",
-      label: <a onClick={() => setIsMenuOpen(true)}>关于</a>,
-    },
-  ];
-
-  // TODO use callback
-  const ButtonList = () => {
-    return (
-      <>
-        <Button
-          type="primary"
-          size="small"
-          icon={<UploadOutlined />}
-          disabled
-        >
-          OCR 重构中
-        </Button>
-        <Button
-          type="primary"
-          size="small"
-          icon={<FileImageOutlined />}
-          onClick={openImages}
-        >
-          加载图片
-        </Button>
-        <Button
-          type="primary"
-          size="small"
-          icon={<FolderOpenOutlined />}
-          onClick={openImageFolder}
-        >
-          打开文件夹
-        </Button>
-      </>
-    );
-  };
-
-  if (!imageList || imageList.length === 0) {
-    return (
-      <Empty
-        className={style.empty}
-        description="请加载模型并选择需要加载的图片"
-      >
-        <section className={style.operation}>
-          <ButtonList />
-          {/* <Button><Link to={"/clipboard"}>剪贴板模式</Link></Button> */}
-        </section>
-      </Empty>
-    );
-  }
 
   return (
-    <section className={classNames(style.home, "home")}>
-      {contextHolder}
-      <section className={style.header}>
-        <div className={style.left}>
-          <ButtonList />
-        </div>
-        <Dropdown
-          menu={{ items: menuItems }}
-          overlayClassName={style.rightMenu}
-        >
-          <Button icon={<MenuOutlined />} size="small"></Button>
-        </Dropdown>
-      </section>
-      <section className={style.main}>
-        <aside className={style.aside}>
-          <ThumbnailList
-            imageList={imageList}
-            currentIndex={currentSelected}
-            onSelected={handleImageSelected}
-          />
-        </aside>
-        <section className={style.operation}>
-          <AnnotationBlock
-            imageList={imageList}
-            currentIndex={currentSelected}
-            onSelected={handleImageSelected}
-            annotationList={currentAnnotationList || []}
-            onAnnotationListChange={handleAnnotationListChange}
-            onOCR={handleOCRProcess}
-          />
-        </section>
-      </section>
-      <About open={isMenuOpen} setOpen={setIsMenuOpen} />
-    </section>
-  );
-};
+    <main className="flex h-screen min-h-0 flex-col bg-background">
+      <header className="flex h-14 shrink-0 items-center gap-3 border-b px-4">
+        <div className="flex items-center gap-2 font-semibold tracking-tight"><div className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground"><Sparkles className="size-4" /></div><span>Raw Manga Reader</span></div>
+        <Separator orientation="vertical" className="mx-1 h-5" />
+        <div className="flex flex-1 items-center gap-2">{actions}</div>
+        {images.length ? <Badge variant="secondary">{images.length} 页</Badge> : null}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="打开菜单"><Menu /></Button></DropdownMenuTrigger>
+          <DropdownMenuContent align="end"><DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem></DropdownMenuContent>
+        </DropdownMenu>
+      </header>
 
-export default Home;
+      {images.length ? (
+        <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
+          <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images} currentIndex={currentIndex} onSelected={selectImage} /></aside>
+          <section className="min-h-0"><AnnotationBlock imageList={images} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} /></section>
+        </div>
+      ) : (
+        <section className="relative grid min-h-0 flex-1 place-items-center overflow-hidden p-8">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,var(--color-muted)_0,transparent_65%)] opacity-70" />
+          <div className="relative flex max-w-lg flex-col items-center text-center">
+            <div className="mb-6 grid size-20 place-items-center rounded-3xl border bg-card shadow-sm"><ImagePlus className="size-9 text-muted-foreground" /></div>
+            <Badge variant="outline" className="mb-3">Tauri 2 · React 19</Badge>
+            <h1 className="text-3xl font-semibold tracking-tight">开始阅读与标注</h1>
+            <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground">选择漫画图片或整个文件夹。在画面上拖动即可建立文本区域，OCR 能力将在后续重构阶段接入。</p>
+            <div className="mt-7 flex flex-wrap justify-center gap-2">{actions}</div>
+          </div>
+        </section>
+      )}
+      <About open={aboutOpen} onOpenChange={setAboutOpen} />
+    </main>
+  );
+}

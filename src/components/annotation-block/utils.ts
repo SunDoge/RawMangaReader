@@ -1,54 +1,26 @@
-import { IArea } from "@bmunozg/react-image-area";
+import type { IAnnotationType } from "@/types/annotation";
 
-type Size = {
-  width: number;
-  height: number;
-};
+export type RelativePoint = { x: number; y: number };
 
-export const processPixel2Percent = (
-  containerSize: Size,
-  imageSize: Size,
-  areas: (Omit<IArea, "unit"> & { unit: "px" })[]
-) => {
-    // console.log('containerSize', containerSize);
-    // console.log('imageSize', imageSize);
-    const leftPadding = (containerSize.width - imageSize.width) / 2;
-    const topPadding = (containerSize.height - imageSize.height) / 2;
-    return areas.map(area => {
-        console.log(
-            'area', area, '\n',
-            'leftPadding', leftPadding, '\n',
-            'topPadding', topPadding, '\n',
-            'imageSize', imageSize
-        );
-        const x = Math.max(area.x - leftPadding, 0) / imageSize.width;
-        const y = Math.max(area.y - topPadding, 0) / imageSize.height;
-        const width = Math.min(area.width / imageSize.width, 1 - x);
-        const height = Math.min(area.height / imageSize.height, 1 - y);
-        return {
-            ...area,
-            x,
-            y,
-            width,
-            height,
-            unit: "%" as "%"
-        }
-    });
+const clamp = (value: number) => Math.min(1, Math.max(0, value));
+
+export function createAnnotation(start: RelativePoint, end: RelativePoint, id: string): IAnnotationType {
+  const startX = clamp(start.x);
+  const startY = clamp(start.y);
+  const endX = clamp(end.x);
+  const endY = clamp(end.y);
+
+  return {
+    id,
+    unit: "%",
+    x: Math.min(startX, endX),
+    y: Math.min(startY, endY),
+    width: Math.abs(endX - startX),
+    height: Math.abs(endY - startY),
+    status: "unprocessed",
+  };
 }
 
-export const processPercent2Pixel = (
-    containerSize: Size,
-    imageSize: Size,
-    areas: (Omit<IArea, "unit"> & { unit: "%" })[]
-  ) => {
-      const leftPadding = (containerSize.width - imageSize.width) / 2;
-      const topPadding = (containerSize.height - imageSize.height) / 2;
-      return areas.map(area => ({
-          ...area,
-          x: area.x * imageSize.width + leftPadding,
-          y: area.y * imageSize.height + topPadding,
-          width: area.width * imageSize.width,
-          height: area.height * imageSize.height,
-          unit: "px" as "px"
-      }));
-  }
+export function isUsableAnnotation(annotation: IAnnotationType, minimumSize = 0.01) {
+  return annotation.width > minimumSize && annotation.height > minimumSize;
+}
