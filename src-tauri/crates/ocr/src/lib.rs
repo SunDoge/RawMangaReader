@@ -34,7 +34,7 @@ impl Default for VerticalMergeOptions {
             enabled: true,
             min_aspect_ratio: 1.2,
             min_overlap_ratio: 0.5,
-            max_center_offset_ratio: 0.35,
+            max_center_offset_ratio: 0.15,
             max_gap_width_ratio: 1.5,
         }
     }
@@ -323,7 +323,7 @@ fn can_merge_vertical(
     let center_distance =
         ((upper.x + upper.width / 2.0) - (lower.x + lower.width / 2.0)).abs() * image_width as f32;
     let aligned = overlap_ratio >= options.min_overlap_ratio
-        || center_distance <= upper_width.min(lower_width) * options.max_center_offset_ratio;
+        && center_distance <= upper_width.max(lower_width) * options.max_center_offset_ratio;
 
     let gap = vertical_gap(upper, lower, image_height);
     let max_gap = upper_width.max(lower_width) * options.max_gap_width_ratio;
@@ -474,6 +474,32 @@ mod tests {
         ];
 
         assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
+    }
+
+    #[test]
+    fn keeps_staggered_overlapping_bubbles_separate() {
+        let regions = vec![
+            region(0.1013, 0.4729, 0.0288, 0.0543, "ひとり？"),
+            region(0.0650, 0.5271, 0.0525, 0.0517, "んだ"),
+        ];
+
+        assert_eq!(
+            merge_vertical_regions(regions, 800, 1142, VerticalMergeOptions::default()).len(),
+            2
+        );
+    }
+
+    #[test]
+    fn keeps_aligned_text_from_separate_enclosures_separate() {
+        let regions = vec![
+            region(0.8737, 0.0648, 0.0562, 0.0928, "品評会？"),
+            region(0.8675, 0.1918, 0.0437, 0.0806, "農産物の"),
+        ];
+
+        assert_eq!(
+            merge_vertical_regions(regions, 800, 1142, VerticalMergeOptions::default()).len(),
+            2
+        );
     }
 
     #[test]

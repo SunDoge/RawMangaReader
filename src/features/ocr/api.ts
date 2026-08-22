@@ -51,7 +51,7 @@ export const DEFAULT_VERTICAL_MERGE_OPTIONS: VerticalMergeOptions = {
   enabled: true,
   minAspectRatio: 1.2,
   minOverlapRatio: 0.5,
-  maxCenterOffsetRatio: 0.35,
+  maxCenterOffsetRatio: 0.15,
   maxGapWidthRatio: 1.5,
 };
 
