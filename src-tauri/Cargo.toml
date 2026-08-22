@@ -19,6 +19,7 @@ serde_json = "1.0"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-log = "2"
+tauri-plugin-http = "2"
 
 [lib]
 name = "app_lib"
