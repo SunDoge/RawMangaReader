@@ -34,8 +34,8 @@ export function TranslationOverlaySettings({ open, onOpenChange, options, onOpti
             </select>
           </label>
           <label className="grid gap-1.5 text-xs">
-            <span className="flex justify-between"><span>字号倍率</span><span className="font-mono text-muted-foreground">{options.fontScale.toFixed(2)}</span></span>
-            <input className="h-2 cursor-pointer accent-primary" type="range" min="0.6" max="1.5" step="0.05" value={options.fontScale} onChange={(event) => update({ fontScale: Number(event.target.value) })} />
+            <span className="flex items-center justify-between"><span>字号倍率</span><span className="flex items-center gap-1"><input className="h-8 w-16 rounded-md border bg-background px-2 text-right font-mono outline-none focus:border-ring" type="number" min="40" max="200" step="5" value={Math.round(options.fontScale * 100)} onChange={(event) => update({ fontScale: Math.min(2, Math.max(0.4, Number(event.target.value) / 100)) })} /><span className="text-muted-foreground">%</span></span></span>
+            <input className="h-2 cursor-pointer accent-primary" type="range" min="0.4" max="2" step="0.05" value={options.fontScale} onChange={(event) => update({ fontScale: Number(event.target.value) })} />
           </label>
           <label className="grid gap-1.5 text-xs">
             <span className="flex justify-between"><span>背景不透明度</span><span className="font-mono text-muted-foreground">{Math.round(options.backgroundOpacity * 100)}%</span></span>

@@ -10,7 +10,7 @@ import type { IThumbnailListProps } from "@/components/thumbnail-list";
 import { ResultList } from "@/components/result-list";
 import { FittedTranslation } from "@/components/fitted-translation";
 import { DEFAULT_TRANSLATION_OVERLAY_OPTIONS, type TranslationOverlayOptions } from "@/features/translation/overlay";
-import { createAnnotation, isUsableAnnotation, transformAnnotation, type AnnotationTransform, type RelativePoint } from "./utils";
+import { createAnnotation, isUsableAnnotation, mergeAnnotations, transformAnnotation, type AnnotationTransform, type RelativePoint } from "./utils";
 
 interface AnnotationBlockProps extends IThumbnailListProps {
   annotationList: IAnnotationType[];
@@ -45,15 +45,22 @@ export function AnnotationBlock({
   const [selected, setSelected] = useState(-1);
   const [start, setStart] = useState<RelativePoint | null>(null);
   const [draft, setDraft] = useState<IAnnotationType | null>(null);
+  const [mergeSelection, setMergeSelection] = useState<Set<string>>(() => new Set());
   const transformRef = useRef<{ index: number; transform: AnnotationTransform; start: RelativePoint; annotation: IAnnotationType } | null>(null);
 
   useEffect(() => {
     setSelected(-1);
     setDraft(null);
+    setMergeSelection(new Set());
   }, [currentIndex]);
 
   useEffect(() => {
     annotationListRef.current = annotationList;
+    const ids = new Set(annotationList.map((item) => item.id));
+    setMergeSelection((current) => {
+      const next = new Set([...current].filter((id) => ids.has(id)));
+      return next.size === current.size ? current : next;
+    });
   }, [annotationList]);
 
   const commitAnnotations = useCallback((next: IAnnotationType[]) => {
@@ -134,6 +141,18 @@ export function AnnotationBlock({
 
   const visibleAnnotations = draft ? [...annotationList, draft] : annotationList;
 
+  const mergeSelected = useCallback(() => {
+    const selectedAnnotations = annotationListRef.current.filter((item) => mergeSelection.has(item.id));
+    const merged = mergeAnnotations(selectedAnnotations);
+    if (!merged) return;
+    const firstIndex = annotationListRef.current.findIndex((item) => mergeSelection.has(item.id));
+    const next = annotationListRef.current.filter((item) => !mergeSelection.has(item.id));
+    next.splice(firstIndex, 0, merged);
+    commitAnnotations(next);
+    setSelected(firstIndex);
+    setMergeSelection(new Set());
+  }, [commitAnnotations, mergeSelection]);
+
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_18rem]">
       <div className="flex min-h-0 flex-col bg-muted/20">
@@ -158,6 +177,7 @@ export function AnnotationBlock({
                     "absolute flex items-center justify-center p-0.5 transition",
                     (showBoundingBoxes || annotation.id === draft?.id) && "border-2 border-primary bg-primary/10 hover:bg-primary/20",
                     showBoundingBoxes && selected === index && "border-amber-400 ring-2 ring-black/40",
+                    mergeSelection.has(annotation.id) && "border-cyan-400 ring-2 ring-cyan-400/80",
                   )}
                   style={{
                     left: `${annotation.x * 100}%`,
@@ -165,11 +185,22 @@ export function AnnotationBlock({
                     width: `${annotation.width * 100}%`,
                     height: `${annotation.height * 100}%`,
                     backgroundColor: annotation.translation && translationOverlayOptions.visible
-                      ? `color-mix(in srgb, var(--background) ${translationOverlayOptions.backgroundOpacity * 100}%, transparent)`
+                      ? `rgb(255 255 255 / ${translationOverlayOptions.backgroundOpacity})`
                       : undefined,
+                    borderRadius: annotation.translation && translationOverlayOptions.visible ? "8%" : undefined,
                   }}
                   onPointerDown={(event) => beginTransform(event, annotation, index, "move")}
-                  onClick={() => setSelected(index)}
+                  onClick={(event) => {
+                    if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                      setMergeSelection((current) => {
+                        const next = new Set(current);
+                        if (next.has(annotation.id)) next.delete(annotation.id); else next.add(annotation.id);
+                        return next;
+                      });
+                    } else {
+                      setSelected(index);
+                    }
+                  }}
                   aria-label={`选择区域 ${index + 1}`}
                 >
                   {showBoundingBoxes ? <Badge className="absolute -top-6 left-0 h-5 rounded-sm bg-amber-500 px-1.5 text-[10px] text-black">{index + 1}</Badge> : null}
@@ -205,7 +236,7 @@ export function AnnotationBlock({
         </div>
       </div>
       <aside className="min-h-0 border-l">
-        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onUpdate={updateAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} onTranslateAll={onTranslateAll} translating={translating} />
+        <ResultList annotations={annotationList} selected={selected} onSelect={setSelected} onRemove={removeAnnotation} onUpdate={updateAnnotation} onOCRClick={(annotation, index) => void processAnnotation(annotation, index)} onTranslateAll={onTranslateAll} translating={translating} mergeSelection={mergeSelection} onMergeSelectionChange={(id, checked) => setMergeSelection((current) => { const next = new Set(current); if (checked) next.add(id); else next.delete(id); return next; })} onMergeSelected={mergeSelected} />
       </aside>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { IAnnotationType } from "@/types/annotation";
-import { Check, Copy, Languages, LoaderCircle, Play, RotateCcw, Trash2 } from "lucide-react";
+import { Check, Combine, Copy, Languages, LoaderCircle, Play, RotateCcw, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,10 +17,13 @@ interface IResultListProps {
   onOCRClick?: (data: IAnnotationType, index: number) => void;
   onTranslateAll?: () => void;
   translating?: boolean;
+  mergeSelection?: ReadonlySet<string>;
+  onMergeSelectionChange?: (id: string, selected: boolean) => void;
+  onMergeSelected?: () => void;
 }
 
 export function ResultList(props: IResultListProps) {
-  const { annotations, selected, onOCRClick, onRemove, onSelect, onUpdate, onTranslateAll, translating } = props;
+  const { annotations, selected, onOCRClick, onRemove, onSelect, onUpdate, onTranslateAll, translating, mergeSelection = new Set<string>(), onMergeSelectionChange, onMergeSelected } = props;
 
   const handleCopyAll = useCallback(async () => {
     const text = annotations.map((annotation, index) => `${index + 1}: ${annotation.ocr || ""}`).join("\n");
@@ -38,12 +41,13 @@ export function ResultList(props: IResultListProps) {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
-      <div className="grid grid-cols-4 gap-1.5 border-b p-2">
+      <div className="grid grid-cols-5 gap-1.5 border-b p-2">
         <Button variant="outline" size="xs" onClick={() => void handleCopyAll()} disabled={!annotations.length}><Copy />复制</Button>
         <Button variant="outline" size="xs" onClick={handleOCRAll} disabled={!annotations.length}><Play />检测</Button>
         <Button variant="outline" size="xs" onClick={onTranslateAll} disabled={translating || !annotations.some((item) => item.ocr?.trim())}>
           {translating ? <LoaderCircle className="animate-spin" /> : <Languages />}翻译
         </Button>
+        <Button variant="outline" size="xs" onClick={onMergeSelected} disabled={mergeSelection.size < 2}><Combine />合并</Button>
         <Button variant="destructive" size="xs" onClick={handleClearAll} disabled={!annotations.length}><Trash2 />清空</Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">
@@ -55,7 +59,17 @@ export function ResultList(props: IResultListProps) {
             onClick={() => onSelect?.(index)}
           >
             <div className="mb-2 flex items-center justify-between">
-              <Badge variant="secondary">区域 {index + 1}</Badge>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  checked={mergeSelection.has(annotation.id)}
+                  aria-label={`选择区域 ${index + 1} 用于合并`}
+                  onClick={(event) => event.stopPropagation()}
+                  onChange={(event) => onMergeSelectionChange?.(annotation.id, event.target.checked)}
+                />
+                <Badge variant="secondary">区域 {index + 1}</Badge>
+              </div>
               <div className="flex items-center gap-1">
                 <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon-xs" onClick={(event) => { event.stopPropagation(); onOCRClick?.(annotation, index); }}>
                   {annotation.status === "processing" ? <LoaderCircle className="animate-spin" /> : annotation.status === "finished" ? <RotateCcw /> : <Play />}
