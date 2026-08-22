@@ -1,5 +1,5 @@
 import { createXai } from "@ai-sdk/xai";
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { appHttpFetch } from "@/features/http/proxy";
 
 export type AiHttpTransport = typeof globalThis.fetch;
 
@@ -16,7 +16,7 @@ export interface CreateXaiModelOptions {
 export function createXaiTranslationModel({
   apiKey,
   model = "grok-4.6",
-  transport = tauriFetch,
+  transport = appHttpFetch,
 }: CreateXaiModelOptions) {
   const provider = createXai({
     apiKey,

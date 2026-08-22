@@ -24,6 +24,7 @@ import type { TranslationOverlayOptions } from "@/features/translation/overlay";
 import { DEFAULT_APP_PREFERENCES, formatAppError } from "@/features/preferences";
 import { addRecentSources, sourceName, type RecentSource } from "@/features/recent-sources";
 import { initializeFrontendStorage, persistPreferences, persistRecentSources } from "@/features/storage/database";
+import { configureHttpProxy, configureNativeHttpProxy } from "@/features/http/proxy";
 import type { IAnnotationType } from "@/types/annotation";
 import { naturalSort, prioritizeImageIds } from "./utils";
 
@@ -61,6 +62,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
+    const settings = { proxyEnabled: translationSettings.proxyEnabled, proxyUrl: translationSettings.proxyUrl, proxyNoProxy: translationSettings.proxyNoProxy };
+    configureHttpProxy(settings);
+    const timer = window.setTimeout(() => { void configureNativeHttpProxy(settings).catch((error) => toast.error("无法应用 HTTP 代理", { description: formatAppError(error) })); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [translationSettings.proxyEnabled, translationSettings.proxyNoProxy, translationSettings.proxyUrl]);
+
+  useEffect(() => {
     void initializeFrontendStorage()
       .then(({ preferences, recentSources: storedSources }) => {
         setMergeOptions(preferences.mergeOptions);
@@ -77,11 +85,11 @@ export default function Home() {
   useEffect(() => {
     if (!storageReady) return;
     const timer = window.setTimeout(() => {
-      void persistPreferences({ mergeOptions, showBoundingBoxes, showRawBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels } })
+      void persistPreferences({ mergeOptions, showBoundingBoxes, showRawBoundingBoxes, translationOverlayOptions, translationSettings: { provider: translationSettings.provider, openRouterModel: translationSettings.openRouterModel, comparisonModels: translationSettings.comparisonModels, proxyEnabled: translationSettings.proxyEnabled, proxyUrl: translationSettings.proxyUrl, proxyNoProxy: translationSettings.proxyNoProxy } })
         .catch((error) => toast.error("无法保存前端设置", { description: formatAppError(error) }));
     }, 250);
     return () => window.clearTimeout(timer);
-  }, [mergeOptions, showBoundingBoxes, showRawBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider]);
+  }, [mergeOptions, showBoundingBoxes, showRawBoundingBoxes, storageReady, translationOverlayOptions, translationSettings.comparisonModels, translationSettings.openRouterModel, translationSettings.provider, translationSettings.proxyEnabled, translationSettings.proxyNoProxy, translationSettings.proxyUrl]);
 
   useEffect(() => () => {
     void releaseImages(imagesRef.current.map((image) => image.id));

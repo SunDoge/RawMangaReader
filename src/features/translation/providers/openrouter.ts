@@ -1,4 +1,4 @@
-import { fetch as tauriFetch } from "@tauri-apps/plugin-http";
+import { appHttpFetch } from "@/features/http/proxy";
 
 export type OpenRouterHttpTransport = typeof globalThis.fetch;
 
@@ -29,7 +29,7 @@ interface OpenRouterCompletion {
   error?: { message?: string };
 }
 
-export async function listOpenRouterModels(apiKey: string, transport: OpenRouterHttpTransport = tauriFetch, signal?: AbortSignal): Promise<OpenRouterModel[]> {
+export async function listOpenRouterModels(apiKey: string, transport: OpenRouterHttpTransport = appHttpFetch, signal?: AbortSignal): Promise<OpenRouterModel[]> {
   if (!apiKey.trim()) return [];
   const response = await transport("https://openrouter.ai/api/v1/models", { headers: { "Authorization": `Bearer ${apiKey.trim()}` }, signal });
   const responseBody = await response.text();
@@ -66,7 +66,7 @@ export function parseTranslationArray(text: string, expectedLength: number): str
 
 export async function translateWithOpenRouter(
   texts: string[],
-  { apiKey, model, from = "Japanese", to = "Simplified Chinese", transport = tauriFetch, signal }: OpenRouterTranslationOptions,
+  { apiKey, model, from = "Japanese", to = "Simplified Chinese", transport = appHttpFetch, signal }: OpenRouterTranslationOptions,
 ): Promise<string[]> {
   if (!texts.length) return [];
   if (!apiKey.trim()) throw new Error("请先填写 OpenRouter API Key");

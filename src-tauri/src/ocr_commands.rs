@@ -1,7 +1,8 @@
 use crate::image_store::{ocr_cache_key, CacheKind, ImageCacheStats, ImageStore, RegisteredImage};
+use crate::network::NetworkState;
 use ocr::{
-    OcrEngine, PageRecognition, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY, DETECTION_MODEL,
-    MODEL_VERSION, RECOGNITION_MODEL,
+    OcrEngine, PageRecognition, RegionRecognition, RelativeRect, CHARACTER_DICTIONARY,
+    DETECTION_MODEL, MODEL_VERSION, RECOGNITION_MODEL,
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -136,19 +137,17 @@ pub async fn get_ocr_model_status(
 pub async fn download_ocr_model(
     app: AppHandle,
     state: State<'_, Arc<OcrState>>,
+    network: State<'_, NetworkState>,
 ) -> Result<ModelStatus, String> {
     let state = Arc::clone(state.inner());
     let directory = model_directory(&app)?;
+    let client = network.blocking_client("RawMangaReader/0.1")?;
     tauri::async_runtime::spawn_blocking(move || {
         let _download_guard = state
             .download_lock
             .lock()
             .map_err(|_| "OCR download lock is poisoned".to_string())?;
         fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
-        let client = reqwest::blocking::Client::builder()
-            .user_agent("RawMangaReader/0.1")
-            .build()
-            .map_err(|error| error.to_string())?;
         let mut completed_bytes = MODEL_FILES
             .iter()
             .filter(|file| file_is_valid(&directory, file))
