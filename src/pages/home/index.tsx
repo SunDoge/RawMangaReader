@@ -326,7 +326,7 @@ export default function Home() {
       {images.length ? (
         <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
           <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} /></aside>
-          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} rawRegions={currentRawRegions} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} showRawBoundingBoxes={showRawBoundingBoxes} translationOverlayOptions={translationOverlayOptions} /></section>
+          <section className="min-h-0"><AnnotationBlock imageList={images.map((image) => image.path)} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} rawRegions={currentRawRegions} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} showRawBoundingBoxes={showRawBoundingBoxes} translationOverlayOptions={translationOverlayOptions} onTranslationOverlayVisibilityChange={(visible) => setTranslationOverlayOptions((current) => ({ ...current, visible }))} /></section>
         </div>
       ) : (
         <section className="relative min-h-0 flex-1 overflow-y-auto p-8">
