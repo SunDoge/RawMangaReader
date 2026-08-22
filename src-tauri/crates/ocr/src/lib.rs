@@ -18,6 +18,28 @@ pub struct RelativeRect {
     pub height: f32,
 }
 
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct VerticalMergeOptions {
+    pub enabled: bool,
+    pub min_aspect_ratio: f32,
+    pub min_overlap_ratio: f32,
+    pub max_center_offset_ratio: f32,
+    pub max_gap_width_ratio: f32,
+}
+
+impl Default for VerticalMergeOptions {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            min_aspect_ratio: 1.2,
+            min_overlap_ratio: 0.5,
+            max_center_offset_ratio: 0.35,
+            max_gap_width_ratio: 1.5,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OcrPoint {
@@ -70,6 +92,14 @@ impl OcrEngine {
     }
 
     pub fn recognize_page(&self, image_path: &Path) -> Result<Vec<OcrRegion>> {
+        self.recognize_page_with_options(image_path, VerticalMergeOptions::default())
+    }
+
+    pub fn recognize_page_with_options(
+        &self,
+        image_path: &Path,
+        merge_options: VerticalMergeOptions,
+    ) -> Result<Vec<OcrRegion>> {
         let image = image::open(image_path)
             .with_context(|| format!("failed to open image: {}", image_path.display()))?
             .to_rgb8();
@@ -84,7 +114,9 @@ impl OcrEngine {
             .iter()
             .filter_map(|region| normalized_region(region, width, height))
             .collect::<Vec<_>>();
-        regions = merge_vertical_regions(regions, width, height);
+        if merge_options.enabled {
+            regions = merge_vertical_regions(regions, width, height, merge_options);
+        }
         sort_manga_regions(&mut regions);
         Ok(regions)
     }
@@ -187,6 +219,7 @@ fn merge_vertical_regions(
     mut regions: Vec<OcrRegion>,
     image_width: u32,
     image_height: u32,
+    options: VerticalMergeOptions,
 ) -> Vec<OcrRegion> {
     if regions.len() < 2 {
         return regions;
@@ -207,7 +240,7 @@ fn merge_vertical_regions(
 
         let mut column = regions[start].clone();
         consumed[start] = true;
-        if !is_vertical_region(&column, image_width, image_height) {
+        if !is_vertical_region(&column, image_width, image_height, options) {
             merged.push(column);
             continue;
         }
@@ -217,7 +250,13 @@ fn merge_vertical_regions(
                 (0..regions.len())
                     .filter(|&index| !consumed[index])
                     .filter(|&index| {
-                        can_merge_vertical(&column, &regions[index], image_width, image_height)
+                        can_merge_vertical(
+                            &column,
+                            &regions[index],
+                            image_width,
+                            image_height,
+                            options,
+                        )
                     })
                     .min_by(|&left, &right| {
                         vertical_gap(&column, &regions[left], image_height)
@@ -232,10 +271,15 @@ fn merge_vertical_regions(
     merged
 }
 
-fn is_vertical_region(region: &OcrRegion, image_width: u32, image_height: u32) -> bool {
+fn is_vertical_region(
+    region: &OcrRegion,
+    image_width: u32,
+    image_height: u32,
+    options: VerticalMergeOptions,
+) -> bool {
     let width = region.width * image_width as f32;
     let height = region.height * image_height as f32;
-    height >= width * 1.2
+    height >= width * options.min_aspect_ratio
 }
 
 fn vertical_gap(upper: &OcrRegion, lower: &OcrRegion, image_height: u32) -> f32 {
@@ -247,8 +291,9 @@ fn can_merge_vertical(
     lower: &OcrRegion,
     image_width: u32,
     image_height: u32,
+    options: VerticalMergeOptions,
 ) -> bool {
-    if !is_vertical_region(lower, image_width, image_height) || lower.y < upper.y {
+    if !is_vertical_region(lower, image_width, image_height, options) || lower.y < upper.y {
         return false;
     }
 
@@ -260,10 +305,11 @@ fn can_merge_vertical(
     let overlap_ratio = overlap / upper_width.min(lower_width).max(1.0);
     let center_distance =
         ((upper.x + upper.width / 2.0) - (lower.x + lower.width / 2.0)).abs() * image_width as f32;
-    let aligned = overlap_ratio >= 0.5 || center_distance <= upper_width.min(lower_width) * 0.35;
+    let aligned = overlap_ratio >= options.min_overlap_ratio
+        || center_distance <= upper_width.min(lower_width) * options.max_center_offset_ratio;
 
     let gap = vertical_gap(upper, lower, image_height);
-    let max_gap = upper_width.max(lower_width) * 1.5;
+    let max_gap = upper_width.max(lower_width) * options.max_gap_width_ratio;
     aligned && gap <= max_gap
 }
 
@@ -396,7 +442,7 @@ mod tests {
             region(0.8, 0.28, 0.04, 0.12, "です"),
             region(0.805, 0.1, 0.04, 0.14, "こんにちは"),
         ];
-        let merged = merge_vertical_regions(regions, 1000, 1000);
+        let merged = merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default());
 
         assert_eq!(merged.len(), 1);
         assert_eq!(merged[0].text, "こんにちはです");
@@ -410,7 +456,7 @@ mod tests {
             region(0.74, 0.27, 0.04, 0.15, "左"),
         ];
 
-        assert_eq!(merge_vertical_regions(regions, 1000, 1000).len(), 2);
+        assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
     }
 
     #[test]
@@ -420,7 +466,7 @@ mod tests {
             region(0.8, 0.4, 0.04, 0.1, "下"),
         ];
 
-        assert_eq!(merge_vertical_regions(regions, 1000, 1000).len(), 2);
+        assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
     }
 
     #[test]
@@ -430,6 +476,6 @@ mod tests {
             region(0.2, 0.15, 0.2, 0.04, "second"),
         ];
 
-        assert_eq!(merge_vertical_regions(regions, 1000, 1000).len(), 2);
+        assert_eq!(merge_vertical_regions(regions, 1000, 1000, VerticalMergeOptions::default()).len(), 2);
     }
 }

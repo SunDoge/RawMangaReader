@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ImagePlus, FolderOpen, HardDrive, Info, LoaderCircle, Menu, ScanText, Sparkles } from "lucide-react";
+import { ImagePlus, FolderOpen, HardDrive, Info, LoaderCircle, Menu, ScanText, SlidersHorizontal, Sparkles } from "lucide-react";
 import { ask, open } from "@tauri-apps/plugin-dialog";
 import { readDir } from "@tauri-apps/plugin-fs";
 import { join } from "@tauri-apps/api/path";
@@ -12,7 +12,8 @@ import { About } from "@/components/about";
 import { ThumbnailList } from "@/components/thumbnail-list";
 import { AnnotationBlock } from "@/components/annotation-block";
 import { OcrModelManager } from "@/components/ocr-model-manager";
-import { getOcrModelStatus, recognizePage, recognizeRegion, type OcrModelStatus } from "@/features/ocr/api";
+import { OcrDebugSettings } from "@/components/ocr-debug-settings";
+import { DEFAULT_VERTICAL_MERGE_OPTIONS, getOcrModelStatus, recognizePage, recognizeRegion, type OcrModelStatus, type VerticalMergeOptions } from "@/features/ocr/api";
 import { regionsToAnnotations } from "@/features/ocr/utils";
 import { translateWithMicrosoftEdge } from "@/features/translation/providers/microsoft-edge";
 import type { IAnnotationType } from "@/types/annotation";
@@ -23,9 +24,12 @@ export default function Home() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [modelManagerOpen, setModelManagerOpen] = useState(false);
+  const [ocrSettingsOpen, setOcrSettingsOpen] = useState(false);
   const [modelStatus, setModelStatus] = useState<OcrModelStatus | null>(null);
   const [pageProcessing, setPageProcessing] = useState(false);
   const [translating, setTranslating] = useState(false);
+  const [mergeOptions, setMergeOptions] = useState<VerticalMergeOptions>({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
+  const [showBoundingBoxes, setShowBoundingBoxes] = useState(true);
   const annotations = useRef(new Map<string, IAnnotationType[]>());
   const [currentAnnotations, setCurrentAnnotations] = useState<IAnnotationType[]>([]);
 
@@ -96,7 +100,7 @@ export default function Home() {
     }
     setPageProcessing(true);
     try {
-      const regions = await recognizePage(imagePath);
+      const regions = await recognizePage(imagePath, mergeOptions);
       const next = regionsToAnnotations(regions);
       updateAnnotations(next);
       toast.success(`识别完成，共找到 ${next.length} 个文本区域`);
@@ -105,7 +109,7 @@ export default function Home() {
     } finally {
       setPageProcessing(false);
     }
-  }, [currentAnnotations.length, currentIndex, images, modelStatus?.installed, pageProcessing, updateAnnotations]);
+  }, [currentAnnotations.length, currentIndex, images, mergeOptions, modelStatus?.installed, pageProcessing, updateAnnotations]);
 
   const translateAll = useCallback(async () => {
     if (translating) return;
@@ -155,6 +159,7 @@ export default function Home() {
           <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" aria-label="打开菜单"><Menu /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             <DropdownMenuItem onClick={() => setModelManagerOpen(true)}><HardDrive />OCR 模型</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setOcrSettingsOpen(true)}><SlidersHorizontal />OCR 合并调试</DropdownMenuItem>
             <DropdownMenuItem onClick={() => setAboutOpen(true)}><Info />关于</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -163,7 +168,7 @@ export default function Home() {
       {images.length ? (
         <div className="grid min-h-0 flex-1 grid-cols-[9.5rem_minmax(0,1fr)]">
           <aside className="min-h-0 border-r bg-muted/20"><ThumbnailList imageList={images} currentIndex={currentIndex} onSelected={selectImage} /></aside>
-          <section className="min-h-0"><AnnotationBlock imageList={images} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} /></section>
+          <section className="min-h-0"><AnnotationBlock imageList={images} currentIndex={currentIndex} onSelected={selectImage} annotationList={currentAnnotations} onAnnotationListChange={updateAnnotations} onOCR={runOCR} onTranslateAll={() => void translateAll()} translating={translating} showBoundingBoxes={showBoundingBoxes} /></section>
         </div>
       ) : (
         <section className="relative grid min-h-0 flex-1 place-items-center overflow-hidden p-8">
@@ -179,6 +184,18 @@ export default function Home() {
       )}
       <About open={aboutOpen} onOpenChange={setAboutOpen} />
       <OcrModelManager open={modelManagerOpen} onOpenChange={setModelManagerOpen} status={modelStatus} onStatusChange={setModelStatus} />
+      <OcrDebugSettings
+        open={ocrSettingsOpen}
+        onOpenChange={setOcrSettingsOpen}
+        options={mergeOptions}
+        onOptionsChange={setMergeOptions}
+        showBoundingBoxes={showBoundingBoxes}
+        onShowBoundingBoxesChange={setShowBoundingBoxes}
+        onReset={() => {
+          setMergeOptions({ ...DEFAULT_VERTICAL_MERGE_OPTIONS });
+          setShowBoundingBoxes(true);
+        }}
+      />
     </main>
   );
 }

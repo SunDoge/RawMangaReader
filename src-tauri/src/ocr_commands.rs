@@ -260,12 +260,16 @@ pub async fn recognize_page(
     app: AppHandle,
     state: State<'_, Arc<OcrState>>,
     image_path: String,
+    merge_options: Option<ocr::VerticalMergeOptions>,
 ) -> Result<Vec<OcrRegion>, String> {
     let state = Arc::clone(state.inner());
     let directory = model_directory(&app)?;
     tauri::async_runtime::spawn_blocking(move || {
         with_engine(&state, &directory, |engine| {
-            engine.recognize_page(Path::new(&image_path))
+            engine.recognize_page_with_options(
+                Path::new(&image_path),
+                merge_options.unwrap_or_default(),
+            )
         })
     })
     .await

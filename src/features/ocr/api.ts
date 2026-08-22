@@ -34,6 +34,22 @@ export interface OcrModelProgress {
   totalBytes: number;
 }
 
+export interface VerticalMergeOptions {
+  enabled: boolean;
+  minAspectRatio: number;
+  minOverlapRatio: number;
+  maxCenterOffsetRatio: number;
+  maxGapWidthRatio: number;
+}
+
+export const DEFAULT_VERTICAL_MERGE_OPTIONS: VerticalMergeOptions = {
+  enabled: true,
+  minAspectRatio: 1.2,
+  minOverlapRatio: 0.5,
+  maxCenterOffsetRatio: 0.35,
+  maxGapWidthRatio: 1.5,
+};
+
 export const getOcrModelStatus = () =>
   invoke<OcrModelStatus>("get_ocr_model_status");
 
@@ -43,8 +59,10 @@ export const downloadOcrModel = () =>
 export const removeOcrModel = () =>
   invoke<OcrModelStatus>("remove_ocr_model");
 
-export const recognizePage = (imagePath: string) =>
-  invoke<OcrRegion[]>("recognize_page", { imagePath });
+export const recognizePage = (
+  imagePath: string,
+  mergeOptions: VerticalMergeOptions = DEFAULT_VERTICAL_MERGE_OPTIONS,
+) => invoke<OcrRegion[]>("recognize_page", { imagePath, mergeOptions });
 
 export const recognizeRegion = (
   imagePath: string,
