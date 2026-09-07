@@ -16,7 +16,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-dialog": "~2.7.2",
-    "@tauri-apps/plugin-http": "2.5.9",
+    "@tauri-apps/plugin-http": "2.6.0",
     "@tauri-apps/plugin-log": "~2.9.0",
     "ai": "^7.0.73",
     "class-variance-authority": "^0.7.1",
